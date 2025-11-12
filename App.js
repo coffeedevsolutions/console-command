@@ -1,20 +1,23 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import StatusScreen from './screens/Status';
+import ControlsScreen from './screens/Controls';
+import Grundig1Screen from './screens/grundig1';
+
+const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="Status">
+        <Stack.Screen name="Status" component={StatusScreen} />
+        <Stack.Screen name="Controls" component={ControlsScreen} />
+        <Stack.Screen 
+          name="Grundig1" 
+          component={Grundig1Screen}
+          options={{ title: 'Grundig1 Console' }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
