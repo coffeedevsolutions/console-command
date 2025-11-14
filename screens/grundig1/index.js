@@ -28,6 +28,7 @@ function Grundig1Screen() {
     { id: 'home', label: 'Home' },
     { id: 'input', label: 'Input' },
     { id: 'outputs', label: 'Outputs' },
+    { id: 'outputChannels', label: 'Output Channels' },
     { id: 'tools', label: 'Tools' },
     { id: 'presets', label: 'Presets' },
     { id: 'settings', label: 'Settings' },
@@ -38,20 +39,121 @@ function Grundig1Screen() {
       case 'home':
         return (
           <View style={styles.homeLayout}>
-            {/* Left side: Fader Bank */}
+            {/* Left side: Fader Bank + Controls */}
             <View style={styles.leftPanel}>
-              <FaderBank />
+              {/* Fader Bank - fills available space */}
+              <View style={styles.faderBankContainer}>
+                <ScrollView 
+                  style={styles.faderBankScroll}
+                  contentContainerStyle={styles.faderBankScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <FaderBank />
+                </ScrollView>
+              </View>
+              
+              {/* Selector sections - pinned to bottom */}
+              <View style={styles.selectorsContainer}>
+                {/* Left side: Channels and Limiters stacked */}
+                <View style={styles.leftSelectors}>
+                  {/* Channel Selector */}
+                  <View style={styles.homeChannelSelector}>
+                    <Text style={styles.homeSectionLabel}>OUTPUT CHANNELS</Text>
+                    <View style={styles.selectorButtonGrid}>
+                      {['ch1', 'ch2', 'ch3', 'ch4'].map((ch, index) => (
+                        <TouchableOpacity
+                          key={ch}
+                          style={[
+                            styles.selectorButton,
+                            state.outputs[ch].enabled && styles.selectorButtonActive,
+                          ]}
+                          onPress={() => dispatch({
+                            type: actions.SET_CHANNEL_ENABLED,
+                            channel: ch,
+                            enabled: !state.outputs[ch].enabled,
+                          })}
+                        >
+                          <Text style={[
+                            styles.selectorButtonText,
+                            state.outputs[ch].enabled && styles.selectorButtonTextActive,
+                          ]}>
+                            CH{index + 1}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Limiters */}
+                  <View style={styles.homeLimiters}>
+                    <Text style={styles.homeSectionLabel}>LIMITERS</Text>
+                    <View style={styles.selectorButtonGrid}>
+                      {['ch1', 'ch2', 'ch3', 'ch4'].map((ch, index) => (
+                        <TouchableOpacity
+                          key={ch}
+                          style={[
+                            styles.selectorButton,
+                            state.outputs[ch].limiter.on && styles.selectorButtonActive,
+                          ]}
+                          onPress={() => dispatch({
+                            type: actions.SET_CHANNEL_LIMITER,
+                            channel: ch,
+                            values: { on: !state.outputs[ch].limiter.on },
+                          })}
+                        >
+                          <Text style={[
+                            styles.selectorButtonText,
+                            state.outputs[ch].limiter.on && styles.selectorButtonTextActive,
+                          ]}>
+                            L{index + 1}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Right side: Sequencers stacked */}
+                <View style={styles.rightSelectors}>
+                  <View style={styles.homeSequencer}>
+                    <Text style={styles.homeSectionLabel}>SEQUENCER</Text>
+                    <View style={styles.sequencerStack}>
+                      {['s1', 's2', 's3'].map((seq) => (
+                        <TouchableOpacity
+                          key={seq}
+                          style={[
+                            styles.selectorButton,
+                            styles.sequencerButton,
+                            state.sequencer[seq] && styles.selectorButtonActive,
+                          ]}
+                          onPress={() => dispatch({
+                            type: actions.SET_SEQUENCER,
+                            values: { [seq]: !state.sequencer[seq] },
+                          })}
+                        >
+                          <Text style={[
+                            styles.selectorButtonText,
+                            state.sequencer[seq] && styles.selectorButtonTextActive,
+                          ]}>
+                            {seq.toUpperCase()}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            {/* Right side: Knobs and Channel Strips */}
+            {/* Right side: Knobs only */}
             <View style={styles.rightPanel}>
-              <KnobStack />
-              
-              <View style={styles.channelStrips}>
-                {['ch1', 'ch2', 'ch3', 'ch4'].map((ch) => (
-                  <OutputChannelStrip key={ch} channel={ch} />
-                ))}
-              </View>
+              <ScrollView 
+                style={styles.rightScroll}
+                contentContainerStyle={styles.rightScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <KnobStack />
+              </ScrollView>
             </View>
           </View>
         );
@@ -162,6 +264,20 @@ function Grundig1Screen() {
               }
               label={`CH${selectedChannel.replace('ch', '')} Limiter`}
             />
+          </ScrollView>
+        );
+
+      case 'outputChannels':
+        return (
+          <ScrollView style={styles.tabContent}>
+            <View style={styles.channelStripsContainer}>
+              <Text style={styles.channelStripsLabel}>OUTPUT CHANNELS</Text>
+              <View style={styles.channelStrips}>
+                {['ch1', 'ch2', 'ch3', 'ch4'].map((ch) => (
+                  <OutputChannelStrip key={ch} channel={ch} />
+                ))}
+              </View>
+            </View>
           </ScrollView>
         );
 
@@ -351,17 +467,62 @@ const styles = StyleSheet.create({
     flex: 2,
     borderRightWidth: 1,
     borderRightColor: colors.border,
+    flexDirection: 'column',
+  },
+  faderBankContainer: {
+    flex: 1,
+  },
+  faderBankScroll: {
+    flex: 1,
+  },
+  faderBankScrollContent: {
+    flexGrow: 1,
+    minHeight: '100%',
+  },
+  selectorsContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.panelAlt,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  leftSelectors: {
+    flex: 1,
+  },
+  rightSelectors: {
+    flex: 1,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
   },
   rightPanel: {
     flex: 1,
     padding: spacing.md,
   },
+  rightScroll: {
+    flex: 1,
+  },
+  rightScrollContent: {
+    paddingBottom: spacing.lg,
+  },
+  channelStripsContainer: {
+    padding: spacing.md,
+    backgroundColor: colors.panelAlt,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  channelStripsLabel: {
+    fontSize: typography.tiny,
+    color: colors.inkMuted,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.loose,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
   channelStrips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   separator: {
     height: 1,
@@ -391,6 +552,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   channelTabTextActive: {
+    color: colors.panel,
+  },
+  homeChannelSelector: {
+    padding: spacing.md,
+  },
+  homeLimiters: {
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  homeSequencer: {
+    padding: spacing.md,
+  },
+  homeSectionLabel: {
+    fontSize: typography.tiny,
+    color: colors.inkMuted,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.loose,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  selectorButtonGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  sequencerStack: {
+    flexDirection: 'column',
+    gap: spacing.sm,
+  },
+  selectorButton: {
+    flex: 1,
+    padding: spacing.sm,
+    backgroundColor: colors.panelLight,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+  },
+  selectorButtonActive: {
+    backgroundColor: colors.aluminum,
+    borderColor: colors.accent,
+  },
+  sequencerButton: {
+    flex: 0,
+    width: '100%',
+  },
+  selectorButtonText: {
+    fontSize: typography.small,
+    color: colors.inkMuted,
+    fontWeight: '700',
+  },
+  selectorButtonTextActive: {
     color: colors.panel,
   },
   centeredControl: {

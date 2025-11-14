@@ -21,105 +21,94 @@ export default function OutputChannelStrip({ channel }) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.channelTitle}>CH{channelNum}</Text>
-        <LED on={channelState.enabled} color={colors.ledGreen} size={8} />
+        <LED on={channelState.enabled} color={colors.ledGreen} size={6} />
       </View>
 
-      {/* Routing */}
-      <View style={styles.section}>
-        <SegmentedSwitch
-          value={channelState.route}
-          onChange={(v) => updateChannel(actions.SET_CHANNEL_ROUTE, { route: v })}
-          options={['A', 'B', 'A+B']}
-          label="Input"
-        />
+      {/* Top Row: Routing & Gain Knob */}
+      <View style={styles.topRow}>
+        <View style={styles.routingContainer}>
+          <Text style={styles.miniLabel}>IN</Text>
+          <SegmentedSwitch
+            value={channelState.route}
+            onChange={(v) => updateChannel(actions.SET_CHANNEL_ROUTE, { route: v })}
+            options={['A', 'B', 'A+B']}
+          />
+        </View>
+        
+        <View style={styles.gainContainer}>
+          <Knob
+            value={channelState.gainDb}
+            onChange={(v) => updateChannel(actions.SET_CHANNEL_GAIN, { value: v })}
+            min={-45}
+            max={15}
+            step={0.5}
+            defaultValue={0}
+            label="Gain"
+            format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`}
+            size={40}
+          />
+        </View>
       </View>
 
-      {/* Crossover Quick Status */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>XOVER</Text>
-        <View style={styles.xoverStatus}>
-          <Text style={styles.statusText}>
-            HPF: {channelState.xover.hpf.enabled ? 
-              `${channelState.xover.hpf.freqHz >= 1000 ? 
-                (channelState.xover.hpf.freqHz / 1000).toFixed(1) + 'k' : 
-                channelState.xover.hpf.freqHz}Hz` : 
+      {/* Info Grid: Compact status display */}
+      <View style={styles.infoGrid}>
+        {/* Xover */}
+        <View style={styles.infoCell}>
+          <Text style={styles.miniLabel}>XOVER</Text>
+          <Text style={styles.miniValue}>
+            {channelState.xover.hpf.enabled || channelState.xover.lpf.enabled ? 
+              `${channelState.xover.hpf.enabled ? 'H' : ''}${channelState.xover.lpf.enabled ? 'L' : ''}` : 
               'OFF'}
           </Text>
-          <Text style={styles.statusText}>
-            LPF: {channelState.xover.lpf.enabled ? 
-              `${channelState.xover.lpf.freqHz >= 1000 ? 
-                (channelState.xover.lpf.freqHz / 1000).toFixed(1) + 'k' : 
-                channelState.xover.lpf.freqHz}Hz` : 
-              'OFF'}
+        </View>
+
+        {/* PEQ */}
+        <View style={styles.infoCell}>
+          <Text style={styles.miniLabel}>PEQ</Text>
+          <Text style={styles.miniValue}>
+            {channelState.peq.gain !== 0 ? 
+              `${channelState.peq.gain > 0 ? '+' : ''}${channelState.peq.gain.toFixed(1)}` : 
+              '0.0'}
+          </Text>
+        </View>
+
+        {/* Delay */}
+        <View style={styles.infoCell}>
+          <Text style={styles.miniLabel}>DLY</Text>
+          <Text style={styles.miniValue}>{channelState.delayMs.toFixed(1)}</Text>
+        </View>
+
+        {/* Limiter */}
+        <View style={styles.infoCell}>
+          <View style={styles.limiterCell}>
+            <Text style={styles.miniLabel}>LIM</Text>
+            <LED on={channelState.limiter.on} color={colors.ledAmber} size={4} />
+          </View>
+          <Text style={styles.miniValue}>
+            {channelState.limiter.on ? channelState.limiter.thresholdDb.toFixed(0) : 'OFF'}
           </Text>
         </View>
       </View>
 
-      {/* PEQ */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>PEQ</Text>
-        <Text style={styles.statusText}>
-          {channelState.peq.freq >= 1000 ? 
-            `${(channelState.peq.freq / 1000).toFixed(1)}k` : 
-            `${channelState.peq.freq.toFixed(0)}`}Hz
-        </Text>
-        <Text style={styles.statusText}>
-          {channelState.peq.gain > 0 ? '+' : ''}{channelState.peq.gain.toFixed(1)}dB
-        </Text>
-      </View>
-
-      {/* Delay */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>DELAY</Text>
-        <Text style={styles.statusText}>{channelState.delayMs.toFixed(1)}ms</Text>
-      </View>
-
-      {/* Polarity */}
-      <View style={styles.section}>
-        <RockerSwitch
-          value={channelState.invert}
-          onChange={(v) => updateChannel(actions.SET_CHANNEL_POLARITY, { invert: v })}
-          leftLabel="0°"
-          rightLabel="180°"
-          label="Polarity"
-        />
-      </View>
-
-      {/* Limiter */}
-      <View style={styles.section}>
-        <View style={styles.limiterRow}>
-          <Text style={styles.sectionLabel}>LIM</Text>
-          <LED on={channelState.limiter.on} color={colors.ledAmber} size={6} />
+      {/* Bottom Row: Polarity, Mute, Enable */}
+      <View style={styles.bottomRow}>
+        <View style={styles.polarityContainer}>
+          <RockerSwitch
+            value={channelState.invert}
+            onChange={(v) => updateChannel(actions.SET_CHANNEL_POLARITY, { invert: v })}
+            leftLabel="0°"
+            rightLabel="180°"
+            label=""
+          />
         </View>
-        <Text style={styles.statusText}>
-          {channelState.limiter.on ? `${channelState.limiter.thresholdDb.toFixed(1)}dB` : 'OFF'}
-        </Text>
-      </View>
-
-      {/* Gain */}
-      <View style={styles.section}>
-        <Knob
-          value={channelState.gainDb}
-          onChange={(v) => updateChannel(actions.SET_CHANNEL_GAIN, { value: v })}
-          min={-45}
-          max={15}
-          step={0.5}
-          defaultValue={0}
-          label="Gain"
-          format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`}
-          size={50}
-        />
-      </View>
-
-      {/* Mute & Enable */}
-      <View style={styles.footer}>
+        
         <TouchableOpacity
           style={[styles.muteButton, channelState.mute && styles.muteButtonActive]}
           onPress={() => updateChannel(actions.SET_CHANNEL_MUTE, { mute: !channelState.mute })}
           activeOpacity={0.7}
         >
           <Text style={[styles.muteText, channelState.mute && styles.muteTextActive]}>
-            MUTE
+            M
           </Text>
         </TouchableOpacity>
         
@@ -129,7 +118,7 @@ export default function OutputChannelStrip({ channel }) {
           activeOpacity={0.7}
         >
           <Text style={[styles.enableText, channelState.enabled && styles.enableTextActive]}>
-            EN
+            E
           </Text>
         </TouchableOpacity>
       </View>
@@ -139,95 +128,125 @@ export default function OutputChannelStrip({ channel }) {
 
 const styles = StyleSheet.create({
   container: {
-    width: 120,
+    flex: 1,
+    minWidth: 100,
+    maxWidth: 140,
     backgroundColor: colors.panelAlt,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.sm,
+    padding: spacing.xs,
     ...shadows.md,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     paddingBottom: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   channelTitle: {
-    fontSize: typography.medium,
+    fontSize: typography.small,
     color: colors.ink,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
-  section: {
-    marginBottom: spacing.md,
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+    gap: spacing.xs,
+  },
+  routingContainer: {
+    flex: 1,
     alignItems: 'center',
   },
-  sectionLabel: {
-    fontSize: typography.tiny,
+  miniLabel: {
+    fontSize: typography.tiny - 1,
     color: colors.inkMuted,
     textTransform: 'uppercase',
-    letterSpacing: typography.letterSpacing.loose,
-    marginBottom: spacing.xs,
+    letterSpacing: typography.letterSpacing.tight,
+    marginBottom: 2,
   },
-  xoverStatus: {
+  gainContainer: {
+    alignItems: 'center',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.xs,
+    marginBottom: spacing.xs,
+    justifyContent: 'space-between',
   },
-  statusText: {
+  infoCell: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    paddingVertical: spacing.xs / 2,
+  },
+  miniValue: {
     fontSize: typography.tiny,
     color: colors.ink,
+    fontWeight: '600',
     textAlign: 'center',
   },
-  limiterRow: {
+  limiterCell: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 2,
+    marginBottom: 2,
   },
-  footer: {
+  bottomRow: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: spacing.xs / 2,
+    alignItems: 'center',
+  },
+  polarityContainer: {
+    flex: 1,
   },
   muteButton: {
-    flex: 1,
-    padding: spacing.xs,
+    width: 24,
+    height: 24,
     backgroundColor: colors.panelLight,
-    borderRadius: 4,
+    borderRadius: 3,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   muteButtonActive: {
     backgroundColor: colors.ledRed,
     borderColor: colors.ledRed,
   },
   muteText: {
-    fontSize: typography.tiny,
+    fontSize: typography.tiny - 1,
     color: colors.inkMuted,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   muteTextActive: {
     color: colors.ink,
   },
   enableButton: {
-    padding: spacing.xs,
+    width: 24,
+    height: 24,
     backgroundColor: colors.panelLight,
-    borderRadius: 4,
+    borderRadius: 3,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
-    minWidth: 36,
+    justifyContent: 'center',
   },
   enableButtonActive: {
     backgroundColor: colors.ledGreen,
     borderColor: colors.ledGreen,
   },
   enableText: {
-    fontSize: typography.tiny,
+    fontSize: typography.tiny - 1,
     color: colors.inkMuted,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   enableTextActive: {
     color: colors.panel,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import Fader from './Fader';
 import { spacing } from '../theme';
@@ -15,6 +15,7 @@ const BAND_FREQS = [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
 export default function FaderBank() {
   const { state, dispatch, actions } = useGrundig1Store();
+  const [containerHeight, setContainerHeight] = useState(300);
 
   const handleBandChange = (band, value) => {
     dispatch({
@@ -25,9 +26,21 @@ export default function FaderBank() {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.fadersRow}>
+    <View 
+      style={styles.container}
+      onLayout={(event) => {
+        const { height } = event.nativeEvent.layout;
+        if (height > 0) {
+          setContainerHeight(height - spacing.md * 2); // Account for padding
+        }
+      }}
+    >
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={[styles.fadersRow, { height: containerHeight }]}>
           {state.input.graphicEq.slice(0, 15).map((value, index) => (
             <Fader
               key={index}
@@ -44,6 +57,7 @@ export default function FaderBank() {
               unit="dB"
               marks={true}
               showValue={true}
+              height={containerHeight - 40} // Account for label space
             />
           ))}
         </View>
@@ -54,12 +68,17 @@ export default function FaderBank() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     paddingVertical: spacing.md,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   fadersRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     paddingHorizontal: spacing.sm,
+    minHeight: '100%',
   },
 });
 

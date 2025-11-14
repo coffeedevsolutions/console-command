@@ -14,6 +14,7 @@ export default function Fader({
   unit = 'dB',
   marks = true,
   showValue = true,
+  height,
 }) {
   const lastTapRef = useRef(0);
 
@@ -25,14 +26,16 @@ export default function Fader({
     lastTapRef.current = now;
   };
 
+  const faderHeight = height || 200;
+  
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
       
-      <View style={styles.faderContainer}>
+      <View style={[styles.faderContainer, { height: faderHeight }]}>
         {/* Tick marks */}
         {marks && (
-          <View style={styles.ticksContainer}>
+          <View style={[styles.ticksContainer, { height: faderHeight }]}>
             {Array.from({ length: 13 }).map((_, i) => (
               <View
                 key={i}
@@ -46,7 +49,7 @@ export default function Fader({
         )}
         
         {/* Fader track and thumb */}
-        <View style={styles.sliderWrapper} onTouchEnd={handleDoubleTap}>
+        <View style={[styles.sliderWrapper, { height: faderHeight }]} onTouchEnd={handleDoubleTap}>
           <Slider
             style={styles.slider}
             value={value}
@@ -77,8 +80,11 @@ export default function Fader({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     alignItems: 'center',
     marginHorizontal: spacing.xs,
+    justifyContent: 'flex-start',
+    minWidth: 60,
   },
   label: {
     fontSize: typography.tiny,
@@ -91,10 +97,9 @@ const styles = StyleSheet.create({
   faderContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 180,
+    width: '100%',
   },
   ticksContainer: {
-    height: 180,
     justifyContent: 'space-between',
     marginRight: spacing.xs,
   },
@@ -110,8 +115,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inkMuted,
   },
   sliderWrapper: {
-    width: 200,
-    height: 180,
+    flex: 1,
+    maxWidth: 200,
     justifyContent: 'center',
     transform: [{ rotate: '-90deg' }],
   },
@@ -122,6 +127,7 @@ const styles = StyleSheet.create({
   valueContainer: {
     marginLeft: spacing.xs,
     alignItems: 'flex-start',
+    minWidth: 40,
   },
   valueText: {
     fontSize: typography.small,
