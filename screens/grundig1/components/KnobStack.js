@@ -143,7 +143,8 @@ export default function KnobStack() {
       max: 12,
       step: 0.5,
       defaultValue: 0,
-      label: "Bass | Bass",
+      labelGerman: "Bass",
+      labelEnglish: "Bass",
       format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}dB`,
     },
     {
@@ -153,7 +154,8 @@ export default function KnobStack() {
       max: 12,
       step: 0.5,
       defaultValue: 0,
-      label: "Mid | Mitte",
+      labelGerman: "Mitte",
+      labelEnglish: "Mid",
       format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}dB`,
     },
     {
@@ -163,7 +165,8 @@ export default function KnobStack() {
       max: 12,
       step: 0.5,
       defaultValue: 0,
-      label: "Treble | Höhen",
+      labelGerman: "Höhen",
+      labelEnglish: "Treble",
       format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}dB`,
     },
     {
@@ -173,7 +176,8 @@ export default function KnobStack() {
       max: 100,
       step: 5,
       defaultValue: 20,
-      label: "Low-Cut | Tiefensperre",
+      labelGerman: "Tiefensperre",
+      labelEnglish: "Low-Cut",
       format: (v) => `${v.toFixed(0)}Hz`,
     },
     {
@@ -183,7 +187,8 @@ export default function KnobStack() {
       max: 16000,
       step: 500,
       defaultValue: 16000,
-      label: "High-Cut | Höhensperre",
+      labelGerman: "Höhensperre",
+      labelEnglish: "High-Cut",
       format: (v) => `${(v / 1000).toFixed(1)}k`,
     },
     {
@@ -193,7 +198,8 @@ export default function KnobStack() {
       max: 12,
       step: 1,
       defaultValue: 0,
-      label: "Loudness | Lautstärke",
+      labelGerman: "Lautstärke",
+      labelEnglish: "Loudness",
       format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}`,
     },
     {
@@ -203,7 +209,8 @@ export default function KnobStack() {
       max: 12,
       step: 1,
       defaultValue: 0,
-      label: "Balance | Balance",
+      labelGerman: "Balance",
+      labelEnglish: "Balance",
       format: (v) => v === 0 ? 'C' : v < 0 ? `L${Math.abs(v).toFixed(0)}` : `R${v.toFixed(0)}`,
     },
     {
@@ -213,7 +220,8 @@ export default function KnobStack() {
       max: 100,
       step: 1,
       defaultValue: 75,
-      label: "Master | Hauptlautstärke",
+      labelGerman: "Hauptlautstärke",
+      labelEnglish: "Master",
       format: (v) => `${v.toFixed(0)}%`,
     },
   ];
@@ -238,7 +246,12 @@ export default function KnobStack() {
               size={50}
             />
             <View style={styles.labelContainer}>
-              <Text style={styles.knobLabel}>{config.label}</Text>
+              <Text style={styles.knobLabel} numberOfLines={1}>
+                {config.labelGerman} |
+              </Text>
+              <Text style={styles.knobLabelLine2} numberOfLines={1}>
+                {config.labelEnglish}
+              </Text>
               <Text style={styles.knobValue}>{config.format(config.value)}</Text>
             </View>
           </View>
@@ -251,9 +264,11 @@ export default function KnobStack() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: spacing.xs,
+    paddingLeft: 0,
+    paddingRight: 0,
     paddingTop: spacing.xs / 2,
     paddingBottom: 0,
+    width: '100%',
   },
   knobsStack: {
     flex: 1,
@@ -265,23 +280,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
+    position: 'relative',
   },
   labelContainer: {
-    marginLeft: spacing.sm,
-    flex: 1,
-    justifyContent: 'center',
+    position: 'absolute',
+    left: 95,
+    top: '45%',
+    transform: [{ translateY: -12 }],
+    zIndex: 0,
   },
   knobLabel: {
     fontSize: typography.tiny,
-    color: colors.inkMuted,
+    color: '#2a2e33',
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.loose,
+    marginBottom: 1,
+    lineHeight: typography.tiny + 2,
+    fontWeight: '600',
+  },
+  knobLabelLine2: {
+    fontSize: typography.tiny,
+    color: '#2a2e33',
     textTransform: 'uppercase',
     letterSpacing: typography.letterSpacing.loose,
     marginBottom: 2,
+    lineHeight: typography.tiny + 2,
+    fontWeight: '600',
   },
   knobValue: {
     fontSize: typography.small,
-    color: colors.ink,
-    fontWeight: '600',
+    color: '#1a1f24',
+    fontWeight: '700',
   },
 });
 

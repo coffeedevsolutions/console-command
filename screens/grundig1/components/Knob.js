@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { colors, typography, spacing, shadows, mapRange } from '../theme';
+import { useGrundig1Store } from '../state/grundig1Store';
 
 export default function Knob({
   value,
@@ -16,26 +17,72 @@ export default function Knob({
 }) {
   const [isActive, setIsActive] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [localValue, setLocalValue] = useState(value); // Local state for smooth drag rendering
   const lastTapRef = useRef(0);
   const centerRef = useRef({ x: 0, y: 0 });
   const startTouchRef = useRef({ x: 0, y: 0, onHandle: false, justActivated: false });
   const ringOpacity = useRef(new Animated.Value(0)).current;
+  const dragStartAngleRef = useRef(null); // Track the angle when drag starts
+  const lastDragAngleRef = useRef(null); // Track the last angle during drag to prevent wrapping
+  const { isDraggingRef } = useGrundig1Store(); // Get the ref to prevent sync during drag
+
+  // Sync localValue with prop value, but only when not dragging
+  useEffect(() => {
+    if (!isDragging) {
+      setLocalValue(value);
+    }
+  }, [value, isDragging]);
 
   const minAngle = -135;
   const maxAngle = 135;
-  const currentAngle = mapRange(value, min, max, minAngle, maxAngle);
+  // Use localValue during drag for smooth visual feedback, prop value otherwise
+  const displayValue = isDragging ? localValue : value;
+  const currentAngle = mapRange(displayValue, min, max, minAngle, maxAngle);
   
   // Touch ring size (larger than knob for easy touch)
   // For smaller knobs, use a more generous multiplier
   const touchRingSize = size < 60 ? size * 2.2 : size * 2;
   const touchRingRadius = touchRingSize / 2;
 
-  const calculateAngleFromTouch = (x, y) => {
+  const calculateAngleFromTouch = (x, y, preventWrap = false) => {
     const dx = x - centerRef.current.x;
     const dy = y - centerRef.current.y;
     let angle = Math.atan2(dy, dx) * (180 / Math.PI);
     
-    // Clamp to valid range
+    // If preventing wrap during drag, use the last angle to determine direction
+    if (preventWrap && dragStartAngleRef.current !== null && lastDragAngleRef.current !== null) {
+      // Calculate the shortest path from last angle to new angle
+      let angleDiff = angle - lastDragAngleRef.current;
+      
+      // Normalize angle difference to -180 to 180 range
+      while (angleDiff > 180) angleDiff -= 360;
+      while (angleDiff < -180) angleDiff += 360;
+      
+      // Calculate new angle based on last angle + difference
+      let newAngle = lastDragAngleRef.current + angleDiff;
+      
+      // Clamp to valid range, but don't allow wrapping
+      if (newAngle < minAngle) {
+        // If we're trying to go below min, check if we were already at min
+        if (lastDragAngleRef.current <= minAngle) {
+          newAngle = minAngle; // Stay at min
+        } else {
+          newAngle = minAngle; // Clamp to min
+        }
+      } else if (newAngle > maxAngle) {
+        // If we're trying to go above max, check if we were already at max
+        if (lastDragAngleRef.current >= maxAngle) {
+          newAngle = maxAngle; // Stay at max
+        } else {
+          newAngle = maxAngle; // Clamp to max
+        }
+      }
+      
+      lastDragAngleRef.current = newAngle;
+      return newAngle;
+    }
+    
+    // Normal behavior: clamp to valid range
     if (angle < minAngle) angle = minAngle;
     if (angle > maxAngle) angle = maxAngle;
     
@@ -99,12 +146,21 @@ export default function Knob({
     // If ring is active and touching the handle, start dragging
     if (isActive && touchingHandle) {
       setIsDragging(true);
+      isDraggingRef.current = true; // Set flag to prevent sync during drag
+      
+      // Initialize drag tracking - store the starting angle
+      const startAngle = calculateAngleFromTouch(locationX, locationY);
+      dragStartAngleRef.current = startAngle;
+      lastDragAngleRef.current = startAngle;
       
       // Calculate value from touch position
-      const angle = calculateAngleFromTouch(locationX, locationY);
-      const newValue = angleToValue(angle);
+      const newValue = angleToValue(startAngle);
+      setLocalValue(newValue); // Update local state immediately for smooth visual feedback
       if (newValue !== value) {
-        onChange(newValue);
+        // Use requestAnimationFrame for immediate smooth update
+        requestAnimationFrame(() => {
+          onChange(newValue);
+        });
       }
       return;
     }
@@ -125,24 +181,56 @@ export default function Knob({
     }
   };
 
+  // Use a ref to track animation frames for smooth updates
+  const animationFrameRef = useRef(null);
+  const pendingValueRef = useRef(null);
+  
   const handleTouchMove = (evt) => {
     if (!isDragging || !isActive) return;
     
     const { locationX, locationY } = evt.nativeEvent;
-    const angle = calculateAngleFromTouch(locationX, locationY);
+    // Use preventWrap=true to prevent angle wrapping during drag
+    const angle = calculateAngleFromTouch(locationX, locationY, true);
     const newValue = angleToValue(angle);
     
-    if (newValue !== value) {
-      onChange(newValue);
+    // Update local state immediately for smooth visual feedback
+    setLocalValue(newValue);
+    
+    // Store the pending value
+    pendingValueRef.current = newValue;
+    
+    // Cancel any pending animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
     }
+    
+    // Use requestAnimationFrame for smooth updates
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const valueToUpdate = pendingValueRef.current;
+      if (valueToUpdate !== null && valueToUpdate !== value) {
+        onChange(valueToUpdate);
+        pendingValueRef.current = null;
+      }
+    });
   };
 
   const handleTouchEnd = (evt) => {
+    // Cancel any pending animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    // Reset drag tracking
+    dragStartAngleRef.current = null;
+    lastDragAngleRef.current = null;
+    
     // Check if this was a tap (not a drag)
     const wasDragging = isDragging;
     const wasOnHandle = startTouchRef.current.onHandle;
     const justActivated = startTouchRef.current.justActivated;
     setIsDragging(false);
+    isDraggingRef.current = false; // Clear flag to allow sync again
     
     // If we were dragging the handle, don't process as a tap
     if (wasDragging) return;
@@ -190,8 +278,21 @@ export default function Knob({
         return;
       }
       lastTapRef.current = now;
-
+      
       // Dismiss the ring
+      Animated.timing(ringOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsActive(false);
+      });
+    }
+  };
+
+  // Function to dismiss the ring when tapping outside
+  const dismissRing = () => {
+    if (isActive) {
       Animated.timing(ringOpacity, {
         toValue: 0,
         duration: 200,
@@ -260,10 +361,17 @@ export default function Knob({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents="box-none">
       {label && <Text style={styles.label}>{label}</Text>}
       
-      <View style={styles.knobWrapper}>
+      {/* Overlay to detect taps outside the dial area */}
+      {isActive && (
+        <TouchableWithoutFeedback onPress={dismissRing}>
+          <View style={styles.overlay} pointerEvents="auto" />
+        </TouchableWithoutFeedback>
+      )}
+      
+      <View style={styles.knobWrapper} pointerEvents="box-none">
         <View 
           style={[styles.touchArea, { width: touchRingSize, height: touchRingSize }]}
           {...responder}
@@ -272,24 +380,78 @@ export default function Knob({
           {isActive && (
             <Animated.View style={[styles.touchRing, { opacity: ringOpacity }]}>
               <Svg width={touchRingSize} height={touchRingSize}>
-                {/* Background circle */}
-                <Circle
-                  cx={touchRingSize / 2}
-                  cy={touchRingSize / 2}
-                  r={touchRingRadius - 10}
-                  fill="transparent"
-                  stroke={colors.border}
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                />
+                {/* Dashed circle split into valid and out-of-bounds sections */}
+                {(() => {
+                  const radius = touchRingRadius - 10;
+                  
+                  // Valid range arc (between minAngle and maxAngle)
+                  const validStartRad = (minAngle) * (Math.PI / 180);
+                  const validEndRad = (maxAngle) * (Math.PI / 180);
+                  const validStartX = touchRingSize / 2 + radius * Math.cos(validStartRad);
+                  const validStartY = touchRingSize / 2 + radius * Math.sin(validStartRad);
+                  const validEndX = touchRingSize / 2 + radius * Math.cos(validEndRad);
+                  const validEndY = touchRingSize / 2 + radius * Math.sin(validEndRad);
+                  const validAngleDiff = maxAngle - minAngle;
+                  const validLargeArc = validAngleDiff > 180 ? 1 : 0;
+                  
+                  // Left out-of-bounds arc (before -135°)
+                  const leftStartAngle = -180;
+                  const leftEndAngle = minAngle;
+                  const leftStartRad = (leftStartAngle) * (Math.PI / 180);
+                  const leftEndRad = (leftEndAngle) * (Math.PI / 180);
+                  const leftStartX = touchRingSize / 2 + radius * Math.cos(leftStartRad);
+                  const leftStartY = touchRingSize / 2 + radius * Math.sin(leftStartRad);
+                  const leftEndX = touchRingSize / 2 + radius * Math.cos(leftEndRad);
+                  const leftEndY = touchRingSize / 2 + radius * Math.sin(leftEndRad);
+                  
+                  // Right out-of-bounds arc (after +135°)
+                  const rightStartAngle = maxAngle;
+                  const rightEndAngle = 180;
+                  const rightStartRad = (rightStartAngle) * (Math.PI / 180);
+                  const rightEndRad = (rightEndAngle) * (Math.PI / 180);
+                  const rightStartX = touchRingSize / 2 + radius * Math.cos(rightStartRad);
+                  const rightStartY = touchRingSize / 2 + radius * Math.sin(rightStartRad);
+                  const rightEndX = touchRingSize / 2 + radius * Math.cos(rightEndRad);
+                  const rightEndY = touchRingSize / 2 + radius * Math.sin(rightEndRad);
+                  
+                  return (
+                    <>
+                      {/* Valid range - solid line (no dash) */}
+                      <Path
+                        d={`M ${validStartX} ${validStartY} A ${radius} ${radius} 0 ${validLargeArc} 1 ${validEndX} ${validEndY}`}
+                        fill="transparent"
+                        stroke={colors.border}
+                        strokeWidth={2}
+                      />
+                      {/* Left out-of-bounds - red/dimmed to indicate out of bounds */}
+                      <Path
+                        d={`M ${leftStartX} ${leftStartY} A ${radius} ${radius} 0 0 1 ${leftEndX} ${leftEndY}`}
+                        fill="transparent"
+                        stroke="#ff4444"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        opacity={0.3}
+                      />
+                      {/* Right out-of-bounds - red/dimmed to indicate out of bounds */}
+                      <Path
+                        d={`M ${rightStartX} ${rightStartY} A ${radius} ${radius} 0 0 1 ${rightEndX} ${rightEndY}`}
+                        fill="transparent"
+                        stroke="#ff4444"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        opacity={0.3}
+                      />
+                    </>
+                  );
+                })()}
                 
-                {/* Active arc showing current value */}
+                {/* Active arc showing current value - white */}
                 <Path
                   d={getArcPath()}
-                  stroke={colors.accent}
+                  stroke="#ffffff"
                   strokeWidth={8}
                   fill="transparent"
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                 />
                 
                 {/* Pointer line from center to handle position */}
@@ -316,22 +478,33 @@ export default function Knob({
                   );
                 })()}
                 
-                {/* Touch indicators around the ring */}
+                {/* Dash marks extending inward toward the knob */}
                 {Array.from({ length: 11 }).map((_, i) => {
                   const angle = mapRange(i, 0, 10, minAngle, maxAngle);
                   const rad = (angle * Math.PI) / 180;
                   const radius = touchRingRadius - 10;
-                  const x = touchRingSize / 2 + radius * Math.cos(rad);
-                  const y = touchRingSize / 2 + radius * Math.sin(rad);
+                  const centerX = touchRingSize / 2;
+                  const centerY = touchRingSize / 2;
+                  
+                  // Calculate start and end points for the dash mark
+                  // Start point is on the circle, end point extends inward toward center
+                  const dashLength = i % 5 === 0 ? 8 : 5; // Longer dashes for major marks
+                  const startX = centerX + radius * Math.cos(rad);
+                  const startY = centerY + radius * Math.sin(rad);
+                  const endX = centerX + (radius - dashLength) * Math.cos(rad);
+                  const endY = centerY + (radius - dashLength) * Math.sin(rad);
                   
                   return (
-                    <Circle
+                    <Line
                       key={i}
-                      cx={x}
-                      cy={y}
-                      r={3}
-                      fill={i % 5 === 0 ? colors.ink : colors.inkDim}
-                      opacity={0.6}
+                      x1={startX}
+                      y1={startY}
+                      x2={endX}
+                      y2={endY}
+                      stroke="#000000"
+                      strokeWidth={i % 5 === 0 ? 2 : 1.5}
+                      strokeLinecap="round"
+                      opacity={i % 5 === 0 ? 0.9 : 0.7}
                     />
                   );
                 })}
@@ -347,39 +520,39 @@ export default function Knob({
                   
                   return (
                     <>
-                      {/* Outer glow ring */}
+                      {/* Outer glow ring - white */}
                       <Circle
                         cx={handleX}
                         cy={handleY}
                         r={16}
                         fill="transparent"
-                        stroke={colors.accent}
+                        stroke="#ffffff"
                         strokeWidth={1}
                         opacity={0.3}
                       />
-                      {/* Main handle */}
+                      {/* Main handle - white */}
                       <Circle
                         cx={handleX}
                         cy={handleY}
                         r={12}
-                        fill={isDragging ? colors.accent : colors.aluminum}
-                        stroke={colors.accent}
+                        fill="#ffffff"
+                        stroke="#ffffff"
                         strokeWidth={2}
                       />
-                      {/* Inner indicator */}
+                      {/* Inner indicator - subtle dark center */}
                       <Circle
                         cx={handleX}
                         cy={handleY}
                         r={6}
                         fill={colors.panel}
-                        opacity={0.5}
+                        opacity={0.3}
                       />
-                      {/* Center dot */}
+                      {/* Center dot - white */}
                       <Circle
                         cx={handleX}
                         cy={handleY}
                         r={3}
-                        fill={isDragging ? colors.accent : colors.ink}
+                        fill="#ffffff"
                       />
                     </>
                   );
@@ -432,18 +605,49 @@ export default function Knob({
                   y1={size / 2}
                   x2={size / 2 + (size / 2 - 12) * Math.cos((currentAngle * Math.PI) / 180)}
                   y2={size / 2 + (size / 2 - 12) * Math.sin((currentAngle * Math.PI) / 180)}
-                  stroke={isActive ? colors.accent : colors.aluminum}
+                  stroke={isActive ? "#ffffff" : colors.aluminum}
                   strokeWidth={2}
                   strokeLinecap="round"
                 />
                 
-                {/* Center cap */}
+                {/* Line from center to drag handle - appears on top when active */}
+                {isActive && (() => {
+                  const angleRad = (currentAngle) * (Math.PI / 180);
+                  // Calculate handle position (same as in touch ring)
+                  const touchRingSize = size < 60 ? size * 2.2 : size * 2;
+                  const touchRingRadius = touchRingSize / 2;
+                  const handleOffset = size < 60 ? 12 : 15;
+                  const handleRadius = touchRingRadius - handleOffset;
+                  // Convert handle position to knob's coordinate system
+                  // The knob is centered in the touch area, so we need to calculate relative to knob center
+                  const knobCenterX = size / 2;
+                  const knobCenterY = size / 2;
+                  // The handle is at touchRingSize/2 + handleRadius * cos/sin, but we need it relative to knob
+                  // Since knob is centered in touch area, the handle position relative to knob center is:
+                  const handleX = knobCenterX + handleRadius * Math.cos(angleRad);
+                  const handleY = knobCenterY + handleRadius * Math.sin(angleRad);
+                  
+                  return (
+                    <Line
+                      x1={knobCenterX}
+                      y1={knobCenterY}
+                      x2={handleX}
+                      y2={handleY}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      opacity={0.8}
+                    />
+                  );
+                })()}
+                
+                {/* Center cap - white when active */}
                 <Circle
                   cx={size / 2}
                   cy={size / 2}
                   r={6}
-                  fill={isActive ? colors.accent : colors.aluminum}
-                  stroke={isActive ? colors.accent : colors.border}
+                  fill={isActive ? "#ffffff" : colors.aluminum}
+                  stroke={isActive ? "#ffffff" : colors.border}
                   strokeWidth={isActive ? 2 : 1}
                 />
                 
@@ -467,7 +671,7 @@ export default function Knob({
       {label && (
         <View style={styles.valueContainer}>
           <Text style={[styles.valueText, isActive && styles.valueTextActive]}>
-            {format(value)}
+            {format(displayValue)}
           </Text>
         </View>
       )}
@@ -492,12 +696,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
+    zIndex: 1,
   },
   touchArea: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     overflow: 'visible',
+    zIndex: 2,
   },
   touchRing: {
     position: 'absolute',
@@ -516,7 +722,7 @@ const styles = StyleSheet.create({
   knobBody: {
     borderRadius: 9999,
     backgroundColor: colors.panelLight,
-    borderWidth: 2,
+    borderWidth: 0,
     borderColor: colors.border,
   },
   svg: {
@@ -533,6 +739,14 @@ const styles = StyleSheet.create({
   },
   valueTextActive: {
     color: colors.accent,
+  },
+  overlay: {
+    position: 'absolute',
+    top: -Dimensions.get('window').height,
+    left: -Dimensions.get('window').width,
+    width: Dimensions.get('window').width * 3,
+    height: Dimensions.get('window').height * 3,
+    backgroundColor: 'transparent',
   },
 });
 

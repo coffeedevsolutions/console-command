@@ -404,6 +404,7 @@ export function Grundig1Provider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
   const apiQueueRef = useRef([]);
   const processingRef = useRef(false);
+  const isDraggingRef = useRef(false); // Flag to track if any knob is being dragged
 
   // Auto-save to AsyncStorage
   useEffect(() => {
@@ -453,6 +454,11 @@ export function Grundig1Provider({ children }) {
   // Periodic sync from Arduino (every 5 seconds)
   useEffect(() => {
     const interval = setInterval(async () => {
+      // Skip sync if user is actively dragging to prevent overwriting values
+      if (isDraggingRef.current) {
+        return;
+      }
+      
       try {
         const arduinoState = await syncFromArduino();
         if (arduinoState) {
@@ -594,7 +600,7 @@ export function Grundig1Provider({ children }) {
   };
 
   return (
-    <Grundig1Context.Provider value={{ state, dispatch: enhancedDispatch, actions }}>
+    <Grundig1Context.Provider value={{ state, dispatch: enhancedDispatch, actions, isDraggingRef }}>
       {children}
     </Grundig1Context.Provider>
   );

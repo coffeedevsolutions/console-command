@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Button, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Button, Alert, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Grundig1Provider, useGrundig1Store } from './state/grundig1Store';
 import PanelFrame from './components/PanelFrame';
 import FaderBank from './components/FaderBank';
@@ -15,6 +16,7 @@ import RoutingMatrix from './components/RoutingMatrix';
 import SequencerTools from './components/SequencerTools';
 import Generators from './components/Generators';
 import PresetGrid from './components/PresetGrid';
+import PresetSelector from './components/PresetSelector';
 import RockerSwitch from './components/RockerSwitch';
 import { colors, typography, spacing } from './theme';
 
@@ -44,11 +46,31 @@ function Grundig1Screen() {
               <View style={styles.faderBankContainer}>
                 <FaderBank />
               </View>
+              
+              {/* Preset Selector */}
+              <PresetSelector />
             </View>
 
             {/* Right side: Knobs only */}
             <View style={styles.rightPanel}>
-              <KnobStack />
+              <View style={styles.brushedBackgroundContainer}>
+                <ImageBackground
+                  source={require('../../assets/images/metallic-textured-background.jpg')}
+                  style={styles.brushedBackground}
+                  resizeMode="repeat"
+                  imageStyle={styles.brushedImageStyle}
+                />
+              </View>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.5)', 'rgba(0,0,0,0.2)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.brushedOverlay}
+              >
+                <View style={styles.rightPanelContent}>
+                  <KnobStack />
+                </View>
+              </LinearGradient>
             </View>
           </View>
         );
@@ -356,7 +378,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   leftPanel: {
-    flex: 2,
+    flex: 1,
     borderRightWidth: 1,
     borderRightColor: colors.border,
     flexDirection: 'column',
@@ -381,8 +403,39 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.border,
   },
   rightPanel: {
+    width: 210,
+    borderLeftWidth: 1,
+    borderLeftColor: '#8f8f8f',
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  brushedBackgroundContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 1,
+  },
+  brushedBackground: {
     flex: 1,
-    paddingHorizontal: spacing.md,
+    width: '100%',
+    height: '100%',
+  },
+  brushedImageStyle: {
+    opacity: 1,
+    resizeMode: 'repeat',
+  },
+  brushedOverlay: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  rightPanelContent: {
+    flex: 1,
+    paddingHorizontal: 0,
     paddingTop: spacing.md,
     paddingBottom: 0,
   },
