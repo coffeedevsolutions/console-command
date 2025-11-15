@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Button, Alert } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Grundig1Provider, useGrundig1Store } from './state/grundig1Store';
 import PanelFrame from './components/PanelFrame';
-import QuickAccess from './components/QuickAccess';
 import FaderBank from './components/FaderBank';
 import PEQControls from './components/PEQControls';
 import KnobStack from './components/KnobStack';
@@ -43,117 +42,13 @@ function Grundig1Screen() {
             <View style={styles.leftPanel}>
               {/* Fader Bank - fills available space */}
               <View style={styles.faderBankContainer}>
-                <ScrollView 
-                  style={styles.faderBankScroll}
-                  contentContainerStyle={styles.faderBankScrollContent}
-                  showsVerticalScrollIndicator={false}
-                >
-                  <FaderBank />
-                </ScrollView>
-              </View>
-              
-              {/* Selector sections - pinned to bottom */}
-              <View style={styles.selectorsContainer}>
-                {/* Left side: Channels and Limiters stacked */}
-                <View style={styles.leftSelectors}>
-                  {/* Channel Selector */}
-                  <View style={styles.homeChannelSelector}>
-                    <Text style={styles.homeSectionLabel}>OUTPUT CHANNELS</Text>
-                    <View style={styles.selectorButtonGrid}>
-                      {['ch1', 'ch2', 'ch3', 'ch4'].map((ch, index) => (
-                        <TouchableOpacity
-                          key={ch}
-                          style={[
-                            styles.selectorButton,
-                            state.outputs[ch].enabled && styles.selectorButtonActive,
-                          ]}
-                          onPress={() => dispatch({
-                            type: actions.SET_CHANNEL_ENABLED,
-                            channel: ch,
-                            enabled: !state.outputs[ch].enabled,
-                          })}
-                        >
-                          <Text style={[
-                            styles.selectorButtonText,
-                            state.outputs[ch].enabled && styles.selectorButtonTextActive,
-                          ]}>
-                            CH{index + 1}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Limiters */}
-                  <View style={styles.homeLimiters}>
-                    <Text style={styles.homeSectionLabel}>LIMITERS</Text>
-                    <View style={styles.selectorButtonGrid}>
-                      {['ch1', 'ch2', 'ch3', 'ch4'].map((ch, index) => (
-                        <TouchableOpacity
-                          key={ch}
-                          style={[
-                            styles.selectorButton,
-                            state.outputs[ch].limiter.on && styles.selectorButtonActive,
-                          ]}
-                          onPress={() => dispatch({
-                            type: actions.SET_CHANNEL_LIMITER,
-                            channel: ch,
-                            values: { on: !state.outputs[ch].limiter.on },
-                          })}
-                        >
-                          <Text style={[
-                            styles.selectorButtonText,
-                            state.outputs[ch].limiter.on && styles.selectorButtonTextActive,
-                          ]}>
-                            L{index + 1}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Right side: Sequencers stacked */}
-                <View style={styles.rightSelectors}>
-                  <View style={styles.homeSequencer}>
-                    <Text style={styles.homeSectionLabel}>SEQUENCER</Text>
-                    <View style={styles.sequencerStack}>
-                      {['s1', 's2', 's3'].map((seq) => (
-                        <TouchableOpacity
-                          key={seq}
-                          style={[
-                            styles.selectorButton,
-                            styles.sequencerButton,
-                            state.sequencer[seq] && styles.selectorButtonActive,
-                          ]}
-                          onPress={() => dispatch({
-                            type: actions.SET_SEQUENCER,
-                            values: { [seq]: !state.sequencer[seq] },
-                          })}
-                        >
-                          <Text style={[
-                            styles.selectorButtonText,
-                            state.sequencer[seq] && styles.selectorButtonTextActive,
-                          ]}>
-                            {seq.toUpperCase()}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                </View>
+                <FaderBank />
               </View>
             </View>
 
             {/* Right side: Knobs only */}
             <View style={styles.rightPanel}>
-              <ScrollView 
-                style={styles.rightScroll}
-                contentContainerStyle={styles.rightScrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                <KnobStack />
-              </ScrollView>
+              <KnobStack />
             </View>
           </View>
         );
@@ -377,9 +272,6 @@ function Grundig1Screen() {
     <SafeAreaView style={styles.container}>
       <PanelFrame>
         <View style={styles.screen}>
-          {/* Quick Access Bar */}
-          <QuickAccess />
-
           {/* Tab Navigation */}
           <View style={styles.tabs}>
             {tabs.map((tab) => (
@@ -471,13 +363,8 @@ const styles = StyleSheet.create({
   },
   faderBankContainer: {
     flex: 1,
-  },
-  faderBankScroll: {
-    flex: 1,
-  },
-  faderBankScrollContent: {
-    flexGrow: 1,
-    minHeight: '100%',
+    justifyContent: 'center',
+    alignItems: 'stretch',
   },
   selectorsContainer: {
     flexDirection: 'row',
@@ -495,7 +382,9 @@ const styles = StyleSheet.create({
   },
   rightPanel: {
     flex: 1,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: 0,
   },
   rightScroll: {
     flex: 1,

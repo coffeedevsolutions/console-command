@@ -15,7 +15,10 @@ export default function App() {
         <Stack.Screen 
           name="Grundig1" 
           component={Grundig1Screen}
-          options={{ title: 'Grundig1 Console' }}
+          options={{ 
+            headerShown: false,
+            gestureEnabled: false,
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

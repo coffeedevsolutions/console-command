@@ -26,7 +26,8 @@ export default function Knob({
   const currentAngle = mapRange(value, min, max, minAngle, maxAngle);
   
   // Touch ring size (larger than knob for easy touch)
-  const touchRingSize = size * 2;
+  // For smaller knobs, use a more generous multiplier
+  const touchRingSize = size < 60 ? size * 2.2 : size * 2;
   const touchRingRadius = touchRingSize / 2;
 
   const calculateAngleFromTouch = (x, y) => {
@@ -50,7 +51,9 @@ export default function Knob({
   const isTouchOnHandle = (x, y) => {
     // Calculate the position of the handle at the end of the arc
     const angleRad = (currentAngle) * (Math.PI / 180);
-    const radius = touchRingRadius - 15;
+    // Adjust handle radius for smaller knobs
+    const handleOffset = size < 60 ? 12 : 15;
+    const radius = touchRingRadius - handleOffset;
     const handleX = touchRingSize / 2 + radius * Math.cos(angleRad);
     const handleY = touchRingSize / 2 + radius * Math.sin(angleRad);
     
@@ -59,7 +62,19 @@ export default function Knob({
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // Check if touch is within handle radius (make it generous for easy touch)
-    return distance <= 20;
+    // Scale handle touch radius based on knob size
+    const handleRadius = size < 60 ? 18 : 20;
+    return distance <= handleRadius;
+  };
+  
+  const isTouchInCenter = (x, y) => {
+    const centerX = touchRingSize / 2;
+    const centerY = touchRingSize / 2;
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Center area is roughly the knob size
+    return distance <= size / 2 + 5;
   };
 
   const handleTouchStart = (evt) => {
@@ -122,7 +137,7 @@ export default function Knob({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (evt) => {
     // Check if this was a tap (not a drag)
     const wasDragging = isDragging;
     const wasOnHandle = startTouchRef.current.onHandle;
@@ -138,7 +153,25 @@ export default function Knob({
     // If we just activated the ring in this touch, don't dismiss it immediately
     if (justActivated) return;
     
-    // If ring is active and we tapped anywhere (not the handle), dismiss it
+    // If ring is active, check if tap was in center to dismiss
+    if (isActive && evt) {
+      const { locationX, locationY } = evt.nativeEvent;
+      const tappedCenter = isTouchInCenter(locationX, locationY);
+      
+      if (tappedCenter) {
+        // Center tap dismisses the ring
+        Animated.timing(ringOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => {
+          setIsActive(false);
+        });
+        return;
+      }
+    }
+    
+    // If ring is active and we tapped anywhere (not the handle, not center), dismiss it
     if (isActive) {
       // Check for double tap to reset value
       const now = Date.now();
@@ -184,11 +217,21 @@ export default function Knob({
         handleTouchMove({ nativeEvent: { locationX: touch.locationX, locationY: touch.locationY } });
       }
     },
-    onResponderRelease: () => {
-      handleTouchEnd();
+    onResponderRelease: (evt) => {
+      const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent.changedTouches?.[0];
+      if (touch) {
+        handleTouchEnd({ nativeEvent: { locationX: touch.locationX, locationY: touch.locationY } });
+      } else {
+        handleTouchEnd(null);
+      }
     },
-    onResponderTerminate: () => {
-      handleTouchEnd();
+    onResponderTerminate: (evt) => {
+      const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent.changedTouches?.[0];
+      if (touch) {
+        handleTouchEnd({ nativeEvent: { locationX: touch.locationX, locationY: touch.locationY } });
+      } else {
+        handleTouchEnd(null);
+      }
     },
   };
 
@@ -296,7 +339,9 @@ export default function Knob({
                 {/* Draggable handle at the end of the arc */}
                 {(() => {
                   const angleRad = (currentAngle) * (Math.PI / 180);
-                  const radius = touchRingRadius - 15;
+                  // Adjust handle radius for smaller knobs
+                  const handleOffset = size < 60 ? 12 : 15;
+                  const radius = touchRingRadius - handleOffset;
                   const handleX = touchRingSize / 2 + radius * Math.cos(angleRad);
                   const handleY = touchRingSize / 2 + radius * Math.sin(angleRad);
                   
@@ -418,12 +463,14 @@ export default function Knob({
         </View>
       </View>
 
-      {/* Value display */}
-      <View style={styles.valueContainer}>
-        <Text style={[styles.valueText, isActive && styles.valueTextActive]}>
-          {format(value)}
-        </Text>
-      </View>
+      {/* Value display - only show if label is provided */}
+      {label && (
+        <View style={styles.valueContainer}>
+          <Text style={[styles.valueText, isActive && styles.valueTextActive]}>
+            {format(value)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -431,7 +478,7 @@ export default function Knob({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginVertical: spacing.sm,
+    marginVertical: 0,
   },
   label: {
     fontSize: typography.tiny,
@@ -444,11 +491,13 @@ const styles = StyleSheet.create({
   knobWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   touchArea: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'visible',
   },
   touchRing: {
     position: 'absolute',
