@@ -9,10 +9,12 @@ const STORAGE_KEY = '@grundig1_state';
 const createInitialState = () => ({
   global: {
     master: 75,
+    source: 'turntable',
     presets: { graphicEq: 0, crossover: 0 },
     userPresets: [],
     voltmeter: { live: 12.6, min: 11.8, max: 14.4 },
     passwordLocked: false,
+    lockCode: '',
     firmwareVersion: 'v1.2.8',
   },
   sequencer: { s1: true, s2: false, s3: false, intervalMs: 1000 },
@@ -66,6 +68,7 @@ function createChannelState() {
 // Action types
 const actions = {
   SET_MASTER: 'SET_MASTER',
+  SET_SOURCE: 'SET_SOURCE',
   SET_GRAPHIC_EQ: 'SET_GRAPHIC_EQ',
   SET_GRAPHIC_EQ_BAND: 'SET_GRAPHIC_EQ_BAND',
   SET_INPUT_PEQ: 'SET_INPUT_PEQ',
@@ -86,6 +89,7 @@ const actions = {
   DELETE_USER_PRESET: 'DELETE_USER_PRESET',
   SET_VOLTMETER: 'SET_VOLTMETER',
   SET_PASSWORD_LOCKED: 'SET_PASSWORD_LOCKED',
+  SET_LOCK_CODE: 'SET_LOCK_CODE',
   RESTORE_STATE: 'RESTORE_STATE',
   SYNC_FROM_ARDUINO: 'SYNC_FROM_ARDUINO',
   SET_SYNC_STATUS: 'SET_SYNC_STATUS',
@@ -98,6 +102,12 @@ function reducer(state, action) {
       return {
         ...state,
         global: { ...state.global, master: clamp(action.value, 0, 100) },
+      };
+
+    case actions.SET_SOURCE:
+      return {
+        ...state,
+        global: { ...state.global, source: action.source },
       };
 
     case actions.SET_GRAPHIC_EQ:
@@ -297,6 +307,12 @@ function reducer(state, action) {
         global: { ...state.global, passwordLocked: action.locked },
       };
 
+    case actions.SET_LOCK_CODE:
+      return {
+        ...state,
+        global: { ...state.global, lockCode: action.code },
+      };
+
     case actions.RESTORE_STATE:
       return action.state;
 
@@ -480,6 +496,10 @@ export function Grundig1Provider({ children }) {
       switch (action.type) {
         case actions.SET_MASTER:
           await dsp.setMaster(newState.global.master);
+          break;
+
+        case actions.SET_SOURCE:
+          await dsp.setSource(newState.global.source);
           break;
 
         case actions.SET_GRAPHIC_EQ:

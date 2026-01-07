@@ -42,6 +42,11 @@ function toWs(url) {
   return url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
 }
 
+// Helper to append code query param for locked device
+function withCode(path, code) {
+  return code ? `${path}?code=${encodeURIComponent(code)}` : path;
+}
+
 export const dsp = {
   // config
   setBaseUrl,
@@ -115,6 +120,14 @@ export const dsp = {
     return request('/api/lock', { method: 'POST', body: options });
   },
 
+  // Input Source Selection
+  async setSource(source, code) {
+    // source: 'turntable' | 'bluetooth'
+    // code: optional 6-digit PIN if lock is enabled
+    const qs = code ? `?code=${encodeURIComponent(code)}` : '';
+    return request(`/api/source${qs}`, { method: 'POST', body: { source } });
+  },
+
   // Preset management
   async savePreset(slot, name = 'Preset') {
     return request('/api/preset/save', { method: 'POST', body: { slot, name } });
@@ -126,6 +139,33 @@ export const dsp = {
 
   async copyPreset(from, to) {
     return request('/api/preset/copy', { method: 'POST', body: { from, to } });
+  },
+
+  // === Lid Light API ===
+
+  // Get lid light status
+  async getLidLightStatus(code) {
+    return request(withCode('/api/lidlight/status', code), { timeout: 5000 });
+  },
+
+  // Set lid light power on/off
+  async setLidLightPower(on, code) {
+    return request(withCode('/api/lidlight/power', code), { method: 'POST', body: { on } });
+  },
+
+  // Set lid light color using RGB values (0-255)
+  async setLidLightColorRgb(r, g, b, code) {
+    return request(withCode('/api/lidlight/color', code), { method: 'POST', body: { r, g, b } });
+  },
+
+  // Set lid light color using preset name
+  async setLidLightColorPreset(preset, code) {
+    return request(withCode('/api/lidlight/color', code), { method: 'POST', body: { preset } });
+  },
+
+  // Set lid light brightness (0-100%)
+  async setLidLightBrightness(brightness, code) {
+    return request(withCode('/api/lidlight/brightness', code), { method: 'POST', body: { brightness } });
   },
 
   // optional realtime updates if your firmware exposes ws://<ip>/ws
@@ -158,6 +198,7 @@ export function arduinoToGrundig1State(arduinoState) {
   const state = {
     global: {
       master: Math.round((arduinoState.master || 0) * 100),
+      source: arduinoState.source || 'turntable',
       presets: {
         graphicEq: arduinoState.input?.geqPreset || 0,
         crossover: arduinoState.xoPreset || 0,

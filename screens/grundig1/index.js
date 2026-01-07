@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Button, Alert, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Grundig1Provider, useGrundig1Store } from './state/grundig1Store';
+import { useGrundig1Store } from './state/grundig1Store';
 import PanelFrame from './components/PanelFrame';
 import FaderBank from './components/FaderBank';
 import PEQControls from './components/PEQControls';
@@ -322,13 +322,7 @@ function Grundig1Screen() {
   );
 }
 
-export default function Grundig1() {
-  return (
-    <Grundig1Provider>
-      <Grundig1Screen />
-    </Grundig1Provider>
-  );
-}
+export default Grundig1Screen;
 
 const styles = StyleSheet.create({
   container: {
