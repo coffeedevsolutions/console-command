@@ -46,8 +46,11 @@ export default function Status({ navigation }) {
     setSwitching(true);
     setOptimisticSource(next);
     try {
+      // Post directly and read truth back from /api/status via useConnection.
+      // NOTE: do NOT dispatch SET_SOURCE to the Grundig store here — its
+      // enhancedDispatch queues the action with stale state and would re-POST the
+      // *previous* source a moment later, flipping the device back.
       await dsp.setSource(next, lockCode);
-      dispatch({ type: actions.SET_SOURCE, source: next });
       await conn.reconnectNow();
     } catch (e) {
       setOptimisticSource(null);
