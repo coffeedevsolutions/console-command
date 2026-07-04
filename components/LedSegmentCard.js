@@ -193,8 +193,11 @@ export default function LedSegmentCard({ passwordLocked, lockCode, lidLightState
   const syncInProgressRef = useRef(false);
 
   useEffect(() => {
-    // Only sync when link mode is ON and lid light state exists
-    if (!isLinked || !lidLightState || syncInProgressRef.current || pendingAction) {
+    // Only sync when link mode is ON and lid light state exists.
+    // Crucially, wait until the lid light has actually loaded real state — otherwise
+    // on app launch we'd push its 0/black placeholder to the segments and reset the
+    // lights to off (the ESP had them saved correctly the whole time).
+    if (!isLinked || !lidLightState || !lidLightState.loaded || syncInProgressRef.current || pendingAction) {
       return;
     }
 
@@ -249,7 +252,7 @@ export default function LedSegmentCard({ passwordLocked, lockCode, lidLightState
       // Update ref even if no sync needed
       lastLidLightRef.current = { color: { ...color }, brightness };
     }
-  }, [isLinked, lidLightState?.color?.r, lidLightState?.color?.g, lidLightState?.color?.b, lidLightState?.brightness, pendingAction, setSegmentColor, setSegmentBrightness, refresh]);
+  }, [isLinked, lidLightState?.loaded, lidLightState?.color?.r, lidLightState?.color?.g, lidLightState?.color?.b, lidLightState?.brightness, pendingAction, setSegmentColor, setSegmentBrightness, refresh]);
 
   // Toggle segment expansion
   const toggleSegmentExpansion = (segmentId) => {

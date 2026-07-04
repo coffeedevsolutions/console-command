@@ -31,6 +31,9 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pendingAction, setPendingAction] = useState(false);
+  // True once we've successfully fetched real state at least once. Consumers (e.g.
+  // the linked LED segments) must not act on the initial placeholder (0/black).
+  const [loaded, setLoaded] = useState(false);
   
   const pollingTimerRef = useRef(null);
   const previousLidState = useRef(false);
@@ -90,6 +93,7 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
       }
       
       previousLidState.current = newLidOpen;
+      setLoaded(true);
     } catch (err) {
       setError(err.message || 'Failed to fetch lid light status');
     } finally {
@@ -217,6 +221,12 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
     }
   }, [code, refresh]);
 
+  // Fetch real state immediately on mount so we don't sit on the 0/black
+  // placeholder until the first poll tick (which caused linked segments to reset).
+  useEffect(() => {
+    refresh(true, false);
+  }, [refresh]);
+
   // Periodic polling to detect lid state changes
   // Only polls lid status, not full state (efficient)
   useEffect(() => {
@@ -241,6 +251,7 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
     brightness,
     color,
     loading,
+    loaded,
     error,
     pendingAction,
     isOn,
