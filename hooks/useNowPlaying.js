@@ -14,26 +14,38 @@ export function useNowPlaying({ pollMs = 500, artworkSize = 600, loadArtwork = t
   const [pb, setPb] = useState(null);
 
   const artForId = useRef(null);
+  const artTimer = useRef(null);
   const timer = useRef(null);
+
+  // Streaming (non-downloaded) artwork loads asynchronously and is often nil right
+  // at track start, so retry a few times before giving up.
+  const loadArt = useCallback(async (id, attempt) => {
+    try {
+      const uri = await AppleMusic.getArtwork(artworkSize);
+      if (artForId.current !== id) return;      // track moved on
+      if (uri) { setArtwork(uri); return; }
+    } catch {
+      if (artForId.current !== id) return;
+    }
+    if (artForId.current === id && attempt < 5) {
+      artTimer.current = setTimeout(() => loadArt(id, attempt + 1), 1200);
+    }
+  }, [artworkSize]);
 
   const refreshTrack = useCallback(async () => {
     if (!available) return;
     const np = AppleMusic.getNowPlaying();
     setTrack(np);
     if (!loadArtwork) return;
-    // Only touch artwork on an actual track change (avoids blink-outs from
-    // transient playback-state events reporting no artwork for the same track).
+    // Only react to an actual track change (avoids blink-outs from transient
+    // playback-state events reporting no artwork for the same track).
     const id = np?.persistentID || null;
     if (id === artForId.current) return;
     artForId.current = id;
-    if (!id) { setArtwork(null); return; }
-    try {
-      const uri = await AppleMusic.getArtwork(artworkSize);
-      if (artForId.current === id) setArtwork(uri || null);
-    } catch {
-      if (artForId.current === id) setArtwork(null);
-    }
-  }, [available, artworkSize, loadArtwork]);
+    if (artTimer.current) clearTimeout(artTimer.current);
+    setArtwork(null);              // new track → drop the old album's art
+    if (id) loadArt(id, 0);        // then load (with retries) for streaming art
+  }, [available, loadArtwork, loadArt]);
 
   const refreshState = useCallback(() => {
     if (available) setPb(AppleMusic.getPlaybackState());
@@ -68,6 +80,8 @@ export function useNowPlaying({ pollMs = 500, artworkSize = 600, loadArtwork = t
     timer.current = setInterval(refreshState, pollMs);
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [available, auth, pollMs, refreshState]);
+
+  useEffect(() => () => { if (artTimer.current) clearTimeout(artTimer.current); }, []);
 
   const controls = {
     toggle: () => { AppleMusic.togglePlayPause(); setTimeout(refreshState, 120); },
