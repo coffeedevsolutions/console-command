@@ -39,7 +39,7 @@ export default function App() {
 
   return (
     <Grundig1Provider>
-      <StatusBar style="light" />
+      <StatusBar hidden style="light" />
       <NavigationContainer theme={navTheme}>
         <Stack.Navigator
           initialRouteName="Status"
