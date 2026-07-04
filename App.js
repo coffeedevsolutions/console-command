@@ -7,6 +7,7 @@ import * as Updates from 'expo-updates';
 import StatusScreen from './screens/Status';
 import ControlsScreen from './screens/Controls';
 import NowPlayingScreen from './screens/NowPlaying';
+import LibraryScreen from './screens/Library';
 import Grundig1Screen from './screens/grundig1';
 import { Grundig1Provider } from './screens/grundig1/state/grundig1Store';
 import { color } from './theme/tokens';
@@ -54,6 +55,11 @@ export default function App() {
             name="NowPlaying"
             component={NowPlayingScreen}
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+          />
+          <Stack.Screen
+            name="Library"
+            component={LibraryScreen}
+            options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
           />
           <Stack.Screen
             name="Grundig1"

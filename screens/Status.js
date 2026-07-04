@@ -150,6 +150,20 @@ export default function Status({ navigation }) {
             </Pressable>
           </Reveal>
 
+          {/* MUSIC LIBRARY — browse / search, separate from Now Playing */}
+          <Reveal index={1}>
+            <Panel label="Music Library" code="APPLE MUSIC">
+              <View style={styles.libRow}>
+                <Pressable onPress={() => navigation.navigate('Library', { mode: 'browse' })} style={styles.libBtn}>
+                  <Text style={styles.libBtnText}>BROWSE</Text>
+                </Pressable>
+                <Pressable onPress={() => navigation.navigate('Library', { mode: 'search' })} style={styles.libBtn}>
+                  <Text style={styles.libBtnText}>SEARCH</Text>
+                </Pressable>
+              </View>
+            </Panel>
+          </Reveal>
+
           {/* CONNECTION (when disconnected or opened) */}
           {(showSettings || !conn.connected) && (
             <Reveal index={1}>
@@ -347,6 +361,12 @@ const styles = StyleSheet.create({
   navText: { ...type.tag, color: color.textHi, fontSize: 12 },
   navArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
   npRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  libRow: { flexDirection: 'row', gap: space.sm },
+  libBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: space.md,
+    backgroundColor: color.bgSunken, borderWidth: border.thick, borderColor: color.lineStrong,
+  },
+  libBtnText: { ...type.tag, color: color.textHi, fontSize: 13 },
   npBarLeft: { flex: 1 },
   npBarTitle: { ...type.h2, fontSize: 15, color: color.textHi },
   npBarArtist: { ...type.meta, color: color.accent, marginTop: 2 },
