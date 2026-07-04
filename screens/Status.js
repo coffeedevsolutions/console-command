@@ -137,16 +137,16 @@ export default function Status({ navigation }) {
               wireframe has settled — see onReveal in AppIntro. */}
           {reveal && (
             <>
-          {/* NOW PLAYING mini-bar — above input source, part of the cascade */}
+          {/* NOW PLAYING — headered panel above input source, part of the cascade */}
           <Reveal index={0}>
-            <Pressable onPress={() => navigation.navigate('NowPlaying')} style={styles.npBar}>
-              <View style={styles.npBarLeft}>
-                <Text style={styles.npBarTitle} numberOfLines={1}>{np.track?.title || 'NOW PLAYING'}</Text>
-                <Text style={styles.npBarArtist} numberOfLines={1}>
-                  {np.track?.artist || 'APPLE MUSIC'}
-                </Text>
-              </View>
-              <Text style={styles.npBarTime}>{np.track ? fmt(np.pb?.currentTime) : '→'}</Text>
+            <Pressable onPress={() => navigation.navigate('NowPlaying')}>
+              <Panel label="Now Playing" code={np.track ? 'APPLE MUSIC' : 'TAP TO OPEN'} ticks contentStyle={styles.npRow}>
+                <View style={styles.npBarLeft}>
+                  <Text style={styles.npBarTitle} numberOfLines={1}>{np.track?.title || 'Nothing playing'}</Text>
+                  <Text style={styles.npBarArtist} numberOfLines={1}>{np.track?.artist || 'Apple Music'}</Text>
+                </View>
+                {np.track ? <Text style={styles.npBarTime}>{fmt(np.pb?.currentTime)}</Text> : null}
+              </Panel>
             </Pressable>
           </Reveal>
 
@@ -346,11 +346,7 @@ const styles = StyleSheet.create({
   },
   navText: { ...type.tag, color: color.textHi, fontSize: 12 },
   navArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
-  npBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: color.panel, borderWidth: border.thick, borderColor: color.accent,
-    borderRadius: radius.none, paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.md,
-  },
+  npRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   npBarLeft: { flex: 1 },
   npBarTitle: { ...type.h2, fontSize: 15, color: color.textHi },
   npBarArtist: { ...type.meta, color: color.accent, marginTop: 2 },
