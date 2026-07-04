@@ -18,13 +18,19 @@ export function useNowPlaying({ pollMs = 500, artworkSize = 600 } = {}) {
     if (!available) return;
     const np = AppleMusic.getNowPlaying();
     setTrack(np);
-    if (np && np.hasArtwork && np.persistentID !== artForId.current) {
-      artForId.current = np.persistentID;
-      try { setArtwork(await AppleMusic.getArtwork(artworkSize)); }
-      catch { setArtwork(null); }
-    } else if (!np || !np.hasArtwork) {
-      artForId.current = null;
-      setArtwork(null);
+
+    // Only touch artwork when the TRACK actually changes. Playback-state events can
+    // transiently report no artwork for the current track — reacting to that was
+    // what made the art blink out a few seconds in.
+    const id = np?.persistentID || null;
+    if (id === artForId.current) return;
+    artForId.current = id;
+    if (!id) { setArtwork(null); return; }
+    try {
+      const uri = await AppleMusic.getArtwork(artworkSize);
+      if (artForId.current === id) setArtwork(uri || null); // ignore if track moved on
+    } catch {
+      if (artForId.current === id) setArtwork(null);
     }
   }, [available, artworkSize]);
 

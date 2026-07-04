@@ -5,13 +5,17 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { color, radius, border, space, type } from '../../theme/tokens';
 
-export function Tick({ corner }) {
-  const s = [styles.tick];
-  if (corner === 'tl') s.push(styles.tl);
-  if (corner === 'tr') s.push(styles.tr);
-  if (corner === 'bl') s.push(styles.bl);
-  if (corner === 'br') s.push(styles.br);
-  return <View pointerEvents="none" style={s} />;
+// `offset` places the L-mark relative to the parent's corner: -1 hugs the border,
+// a larger negative value (e.g. -12) makes it float outside.
+export function Tick({ corner, offset = -1, size = 10 }) {
+  const base = { position: 'absolute', width: size, height: size, borderColor: color.lineStrong, zIndex: 2 };
+  const pos = {
+    tl: { top: offset, left: offset, borderTopWidth: border.thick, borderLeftWidth: border.thick },
+    tr: { top: offset, right: offset, borderTopWidth: border.thick, borderRightWidth: border.thick },
+    bl: { bottom: offset, left: offset, borderBottomWidth: border.thick, borderLeftWidth: border.thick },
+    br: { bottom: offset, right: offset, borderBottomWidth: border.thick, borderRightWidth: border.thick },
+  }[corner];
+  return <View pointerEvents="none" style={[base, pos]} />;
 }
 
 export default function Panel({

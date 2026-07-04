@@ -1,18 +1,23 @@
 // screens/NowPlaying.js — full-screen Apple Music "Now Playing", schematic styling.
-// Immersive: no close button until you tap the screen; the close (X) then shows for
-// 5s and fades. Pure JS on the baked Apple Music module → ships OTA.
+// Immersive: no close button until you tap the screen, then the X shows for 5s and
+// fades. Responsive portrait/landscape with a fluid animated reflow on rotation.
+// Pure JS on the baked Apple Music module → ships OTA.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Image, Pressable, StyleSheet, Text, View,
+  Image, Pressable, StyleSheet, Text, useWindowDimensions, View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing, LinearTransition, useAnimatedStyle, useSharedValue, withTiming,
+} from 'react-native-reanimated';
 import DottedGrid from '../components/ui/DottedGrid';
 import { Tick } from '../components/ui/Panel';
+import { PlayIcon, PauseIcon, PrevIcon, NextIcon } from '../components/ui/TransportIcons';
 import { useNowPlaying } from '../hooks/useNowPlaying';
-import { color, border, radius, space, type, font } from '../theme/tokens';
+import { color, border, space, type, font } from '../theme/tokens';
 
 const CHROME_HOLD_MS = 5000;
+const REFLOW = LinearTransition.duration(360).easing(Easing.inOut(Easing.cubic));
 
 function fmt(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -21,6 +26,14 @@ function fmt(sec) {
 
 export default function NowPlaying({ navigation }) {
   const { available, auth, track, artwork, pb, controls, requestAuth } = useNowPlaying();
+  const { width: W, height: H } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const landscape = W > H;
+
+  // Album art is ALWAYS a square; sized by the constraining dimension.
+  const artSize = landscape
+    ? Math.min(H - insets.top - insets.bottom - 72, 460)
+    : Math.min(W - space.xl * 2, 460);
 
   const [trackW, setTrackW] = useState(0);
   const chrome = useSharedValue(0);
@@ -48,13 +61,9 @@ export default function NowPlaying({ navigation }) {
   const shuffleOn = pb?.shuffleMode && pb.shuffleMode !== 'off';
   const repeatOn = pb?.repeatMode && pb.repeatMode !== 'none';
 
-  function seekAt(x) {
-    if (trackW > 0 && dur > 0) controls.seek((x / trackW) * dur);
-    reveal();
-  }
-  function withReveal(fn) { return () => { fn(); reveal(); }; }
+  const seekAt = (x) => { if (trackW > 0 && dur > 0) controls.seek((x / trackW) * dur); reveal(); };
+  const withReveal = (fn) => () => { fn(); reveal(); };
 
-  // Guard states -----------------------------------------------------------
   if (!available || auth === 'denied' || auth === 'restricted') {
     return (
       <Guard
@@ -80,72 +89,72 @@ export default function NowPlaying({ navigation }) {
   return (
     <View style={styles.root}>
       <DottedGrid />
-      {/* Whole surface taps to reveal the close button; inner controls claim their own taps. */}
       <Pressable style={styles.flex} onPress={reveal}>
         <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
           <Text style={styles.eyebrow}>NOW PLAYING · APPLE MUSIC</Text>
 
-          {/* Artwork */}
-          <View style={styles.artWrap}>
-            <Tick corner="tl" /><Tick corner="tr" /><Tick corner="bl" /><Tick corner="br" />
-            {artwork ? (
-              <Image source={{ uri: artwork }} style={styles.art} resizeMode="cover" />
-            ) : (
-              <View style={[styles.art, styles.artEmpty]}>
-                <Text style={styles.artEmptyText}>{track ? 'NO ARTWORK' : 'NO SIGNAL'}</Text>
+          <Animated.View style={[styles.content, landscape ? styles.contentLandscape : styles.contentPortrait]}>
+            {/* Artwork (square) */}
+            <Animated.View layout={REFLOW} style={[styles.artWrap, { width: artSize, height: artSize }]}>
+              <Tick corner="tl" offset={-12} size={16} />
+              <Tick corner="tr" offset={-12} size={16} />
+              <Tick corner="bl" offset={-12} size={16} />
+              <Tick corner="br" offset={-12} size={16} />
+              {artwork ? (
+                <Image source={{ uri: artwork }} style={styles.art} resizeMode="cover" />
+              ) : (
+                <View style={[styles.art, styles.artEmpty]}>
+                  <Text style={styles.artEmptyText}>{track ? 'NO ARTWORK' : 'NO SIGNAL'}</Text>
+                </View>
+              )}
+            </Animated.View>
+
+            {/* Info + controls */}
+            <Animated.View layout={REFLOW} style={[styles.rightCol, landscape && styles.rightColLandscape]}>
+              <View style={styles.meta}>
+                <Text style={styles.title} numberOfLines={2}>{track?.title || '—'}</Text>
+                <Text style={styles.artist} numberOfLines={1}>
+                  {track?.artist || '—'}{track?.isExplicit ? '  ▪ E' : ''}
+                </Text>
+                <Text style={styles.album} numberOfLines={1}>{track?.albumTitle || ''}</Text>
               </View>
-            )}
-          </View>
 
-          {/* Metadata */}
-          <View style={styles.meta}>
-            <Text style={styles.title} numberOfLines={2}>{track?.title || '—'}</Text>
-            <Text style={styles.artist} numberOfLines={1}>
-              {track?.artist || '—'}{track?.isExplicit ? '  ▪ E' : ''}
-            </Text>
-            <Text style={styles.album} numberOfLines={1}>{track?.albumTitle || ''}</Text>
-          </View>
+              <View style={styles.progressBlock}>
+                <Pressable
+                  onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
+                  onPress={(e) => seekAt(e.nativeEvent.locationX)}
+                  style={styles.track}
+                  hitSlop={12}
+                >
+                  <View style={[styles.fill, { width: `${prog * 100}%` }]} />
+                </Pressable>
+                <View style={styles.timeRow}>
+                  <Text style={styles.time}>{fmt(cur)}</Text>
+                  <Text style={styles.time}>{fmt(dur)}</Text>
+                </View>
+              </View>
 
-          {/* Progress (tap to seek) */}
-          <View style={styles.progressBlock}>
-            <Pressable
-              onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
-              onPress={(e) => seekAt(e.nativeEvent.locationX)}
-              style={styles.track}
-              hitSlop={10}
-            >
-              <View style={[styles.fill, { width: `${prog * 100}%` }]} />
-            </Pressable>
-            <View style={styles.timeRow}>
-              <Text style={styles.time}>{fmt(cur)}</Text>
-              <Text style={styles.time}>{fmt(dur)}</Text>
-            </View>
-          </View>
-
-          {/* Transport */}
-          <View style={styles.transport}>
-            <Pressable onPress={withReveal(() => controls.setShuffle(shuffleOn ? 'off' : 'songs'))} style={styles.modeBtn}>
-              <Text style={[styles.modeText, shuffleOn && styles.modeOn]}>SHUF</Text>
-            </Pressable>
-
-            <Pressable onPress={withReveal(controls.previous)} style={styles.skipBtn}>
-              <Text style={styles.skipGlyph}>⏮</Text>
-            </Pressable>
-
-            <Pressable onPress={withReveal(controls.toggle)} style={styles.playBtn}>
-              <Text style={styles.playGlyph}>{playing ? '❚❚' : '▶'}</Text>
-            </Pressable>
-
-            <Pressable onPress={withReveal(controls.next)} style={styles.skipBtn}>
-              <Text style={styles.skipGlyph}>⏭</Text>
-            </Pressable>
-
-            <Pressable onPress={withReveal(() => controls.setRepeat(repeatOn ? 'none' : 'all'))} style={styles.modeBtn}>
-              <Text style={[styles.modeText, repeatOn && styles.modeOn]}>
-                {pb?.repeatMode === 'one' ? 'RPT1' : 'RPT'}
-              </Text>
-            </Pressable>
-          </View>
+              <View style={styles.transport}>
+                <Pressable onPress={withReveal(() => controls.setShuffle(shuffleOn ? 'off' : 'songs'))} style={styles.modeBtn}>
+                  <Text style={[styles.modeText, shuffleOn && styles.modeOn]}>SHUF</Text>
+                </Pressable>
+                <Pressable onPress={withReveal(controls.previous)} style={styles.skipBtn}>
+                  <PrevIcon size={20} color={color.textHi} />
+                </Pressable>
+                <Pressable onPress={withReveal(controls.toggle)} style={styles.playBtn}>
+                  {playing ? <PauseIcon size={22} color={color.accentInk} /> : <PlayIcon size={22} color={color.accentInk} />}
+                </Pressable>
+                <Pressable onPress={withReveal(controls.next)} style={styles.skipBtn}>
+                  <NextIcon size={20} color={color.textHi} />
+                </Pressable>
+                <Pressable onPress={withReveal(() => controls.setRepeat(repeatOn ? 'none' : 'all'))} style={styles.modeBtn}>
+                  <Text style={[styles.modeText, repeatOn && styles.modeOn]}>
+                    {pb?.repeatMode === 'one' ? 'RPT1' : 'RPT'}
+                  </Text>
+                </Pressable>
+              </View>
+            </Animated.View>
+          </Animated.View>
         </SafeAreaView>
       </Pressable>
 
@@ -193,39 +202,41 @@ const styles = StyleSheet.create({
   safe: { flex: 1, paddingHorizontal: space.xl, paddingTop: space.md },
   eyebrow: { fontFamily: font.mono, fontSize: 11, letterSpacing: 3, color: color.textLow, textAlign: 'center' },
 
-  artWrap: {
-    alignSelf: 'center', marginTop: space.xl, aspectRatio: 1, width: '100%', maxWidth: 460,
-    borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.bgSunken,
-  },
+  content: { flex: 1 },
+  contentPortrait: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: space.xxl },
+  contentLandscape: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.xxl },
+
+  artWrap: { borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.bgSunken },
   art: { width: '100%', height: '100%' },
   artEmpty: { alignItems: 'center', justifyContent: 'center' },
   artEmptyText: { fontFamily: font.mono, fontSize: 12, letterSpacing: 3, color: color.textLow },
 
-  meta: { marginTop: space.xl, gap: 4 },
+  rightCol: { width: '100%', gap: space.xl },
+  rightColLandscape: { flex: 1, width: undefined, maxWidth: 520, justifyContent: 'center' },
+
+  meta: { gap: 4 },
   title: { fontFamily: font.display, fontSize: 24, fontWeight: '800', letterSpacing: -0.3, color: color.textHi },
   artist: { fontFamily: font.mono, fontSize: 13, letterSpacing: 1, color: color.accent },
   album: { fontFamily: font.mono, fontSize: 12, letterSpacing: 1, color: color.textMid },
 
-  progressBlock: { marginTop: space.xl },
+  progressBlock: {},
   track: { height: 8, borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.bgSunken, overflow: 'hidden', justifyContent: 'center' },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: color.accent },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   time: { fontFamily: font.mono, fontSize: 11, letterSpacing: 1, color: color.textMid },
 
-  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space.xxl, gap: space.sm },
-  modeBtn: { paddingVertical: space.sm, paddingHorizontal: space.sm, minWidth: 52, alignItems: 'center' },
+  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
+  modeBtn: { paddingVertical: space.sm, minWidth: 52, alignItems: 'center' },
   modeText: { fontFamily: font.mono, fontSize: 11, letterSpacing: 1, color: color.textLow },
   modeOn: { color: color.accent },
   skipBtn: {
     width: 60, height: 56, alignItems: 'center', justifyContent: 'center',
     borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.bgSunken,
   },
-  skipGlyph: { color: color.textHi, fontSize: 20 },
   playBtn: {
     width: 84, height: 64, alignItems: 'center', justifyContent: 'center',
     borderWidth: border.thick, borderColor: color.accent, backgroundColor: color.accent,
   },
-  playGlyph: { color: color.accentInk, fontSize: 22, fontWeight: '800' },
 
   closeWrap: { position: 'absolute', top: 0, right: 0, padding: space.md, zIndex: 20 },
   closeBtn: {
