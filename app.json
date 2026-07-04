@@ -29,12 +29,15 @@
         "NSLocalNetworkUsageDescription": "Console Command connects to your Whir console over the local network to send control commands.",
         "NSAppleMusicUsageDescription": "Console Command shows what's playing and lets you control Apple Music playback that's streaming to the console.",
         "NSBonjourServices": [
+          "_http._tcp",
           "_http._tcp"
         ],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
-      }
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.whir.consolecommand",
@@ -44,7 +47,9 @@
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -60,7 +65,8 @@
         {
           "iosMicrophonePermission": "Console Command uses the microphone to create live audio-reactive visuals from what's playing."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {
