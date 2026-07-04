@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'MediaPlayer'
+  s.frameworks = 'MediaPlayer', 'MusicKit'
 
   s.source_files = "**/*.{h,m,mm,swift,hpp,cpp}"
 end

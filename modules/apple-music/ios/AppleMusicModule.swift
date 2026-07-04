@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import MediaPlayer
+import MusicKit
 
 // Native bridge over MPMusicPlayerController.systemMusicPlayer — this controls the
 // REAL system Apple Music app, so play/pause/skip/queue changes also change what the
@@ -78,6 +79,38 @@ public class AppleMusicModule: Module {
       self.player.prepend(MPMusicPlayerStoreQueueDescriptor(storeIDs: ids))
     }
 
+    // MARK: - Library search / play (MediaPlayer — your added/downloaded songs).
+    // Works with the Media Library permission we already have; no MusicKit entitlement.
+    AsyncFunction("searchLibrarySongs") { (term: String, limit: Int) -> [[String: Any]] in
+      return self.librarySongs(matching: term, limit: limit)
+    }
+    AsyncFunction("getAllSongs") { (limit: Int) -> [[String: Any]] in
+      return self.librarySongs(matching: nil, limit: limit)
+    }
+    Function("playLibrarySongs") { (persistentIDs: [String]) in
+      self.playLibrary(persistentIDs: persistentIDs)
+    }
+
+    // MARK: - Apple Music catalog (MusicKit). Requires the "MusicKit" app service to be
+    // enabled for the App ID; without it these degrade to empty/nil rather than crash.
+    AsyncFunction("requestMusicKitAuthorization") { (promise: Promise) in
+      if #available(iOS 15.0, *) {
+        Task { promise.resolve(String(describing: await MusicAuthorization.request())) }
+      } else { promise.resolve("unavailable") }
+    }
+    AsyncFunction("searchCatalogSongs") { (term: String, limit: Int, promise: Promise) in
+      if #available(iOS 15.0, *) {
+        Task { promise.resolve(await self.catalogSearch(term, limit: limit)) }
+      } else { promise.resolve([[String: Any]]()) }
+    }
+    // Reliable artwork for the currently-playing STREAMING track, via its catalog id.
+    AsyncFunction("getNowPlayingCatalogArtworkURL") { (size: Int, promise: Promise) in
+      let sid = self.player.nowPlayingItem?.playbackStoreID ?? ""
+      if #available(iOS 15.0, *), !sid.isEmpty {
+        Task { promise.resolve(await self.catalogArtworkURL(storeID: sid, size: size)) }
+      } else { promise.resolve(nil) }
+    }
+
     // MARK: - Observation lifecycle
     OnStartObserving { self.beginObserving() }
     OnStopObserving { self.endObserving() }
@@ -150,6 +183,77 @@ public class AppleMusicModule: Module {
     guard let collection = query.collections?.first else { return }
     player.setQueue(with: collection)
     player.play()
+  }
+
+  // MARK: - Library search helpers (MediaPlayer)
+
+  private func librarySongs(matching term: String?, limit: Int) -> [[String: Any]] {
+    guard let items = MPMediaQuery.songs().items else { return [] }
+    var result = items
+    if let t = term?.lowercased(), !t.isEmpty {
+      result = items.filter {
+        ($0.title?.lowercased().contains(t) ?? false) ||
+        ($0.artist?.lowercased().contains(t) ?? false) ||
+        ($0.albumTitle?.lowercased().contains(t) ?? false)
+      }
+    }
+    let capped = limit > 0 ? Array(result.prefix(limit)) : result
+    return capped.map { item in
+      [
+        "persistentID": String(item.persistentID),
+        "playbackStoreID": item.playbackStoreID, // catalog id if it's an Apple Music item
+        "title": item.title ?? "",
+        "artist": item.artist ?? "",
+        "albumTitle": item.albumTitle ?? "",
+        "duration": item.playbackDuration,
+        "hasArtwork": item.artwork != nil
+      ]
+    }
+  }
+
+  private func playLibrary(persistentIDs ids: [String]) {
+    guard let all = MPMediaQuery.songs().items else { return }
+    let wanted = Set(ids.compactMap { UInt64($0) })
+    let items = all.filter { wanted.contains($0.persistentID) }
+    if items.isEmpty { return }
+    player.setQueue(with: MPMediaItemCollection(items: items))
+    player.play()
+  }
+
+  // MARK: - Catalog helpers (MusicKit)
+
+  @available(iOS 15.0, *)
+  private func catalogSearch(_ term: String, limit: Int) async -> [[String: Any]] {
+    do {
+      var request = MusicCatalogSearchRequest(term: term, types: [Song.self])
+      request.limit = limit > 0 ? min(limit, 25) : 25
+      let response = try await request.response()
+      return response.songs.map { song in
+        [
+          "id": song.id.rawValue,
+          "title": song.title,
+          "artist": song.artistName,
+          "albumTitle": song.albumTitle ?? "",
+          "duration": song.duration ?? 0,
+          "artworkURL": song.artwork?.url(width: 600, height: 600)?.absoluteString ?? ""
+        ]
+      }
+    } catch {
+      return []
+    }
+  }
+
+  @available(iOS 15.0, *)
+  private func catalogArtworkURL(storeID: String, size: Int) async -> String? {
+    do {
+      let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(storeID))
+      let response = try await request.response()
+      guard let song = response.items.first,
+            let url = song.artwork?.url(width: size, height: size) else { return nil }
+      return url.absoluteString
+    } catch {
+      return nil
+    }
   }
 
   private func beginObserving() {

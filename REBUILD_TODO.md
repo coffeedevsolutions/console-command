@@ -7,30 +7,30 @@ and do them all together the next time a rebuild is needed.
 
 Current build: runtime `1.0.0`, bundle id `com.whir.consolecommand`, Apple team Whir Inc.
 
-## Queued for next rebuild
+## Queued for next rebuild — native code is ALREADY WRITTEN, staged in the module
 
-### 1. MusicKit — reliable artwork + full catalog search/browse
-The current Apple Music module uses the **MediaPlayer** framework (`MPMusicPlayerController` /
-`MPMediaQuery`), which only reliably exposes **downloaded/library** content. Streaming
-(catalog) artwork is best-effort (we retry in JS, but it can still be nil), and there is
-**no catalog search** at all. Fix by adding **MusicKit** (Swift, iOS 15+):
+The Swift methods below are committed in `modules/apple-music/ios/AppleMusicModule.swift`
+and exposed (inert) in `modules/apple-music/index.ts`. They are NOT in the current build,
+so JS must feature-detect via `AppleMusic.capabilities` before calling. Nothing in the UI
+calls them yet. **The next `eas build` picks them up.** No further code needed to enable
+the LIBRARY features; the CATALOG features additionally need the Developer-portal step.
 
-- **Apple Developer portal:** enable the **MusicKit** app service for App ID
-  `com.whir.consolecommand` (this provides the entitlement; the MusicKit Swift API then
-  handles tokens via `MusicAuthorization.request()` — no manual developer token needed).
-- Add native methods to `modules/apple-music/ios/AppleMusicModule.swift`:
-  - `searchCatalog(term, limit)` → `MusicCatalogSearchRequest` → songs/albums/artists/playlists
-  - `getCatalogArtworkURL(id, w, h)` → `Artwork.url(width:height:)` (reliable streaming art)
-  - `playCatalogIDs(ids)` already exists (`playStoreIDs`); confirm it plays catalog results
-- JS: extend `modules/apple-music/index.ts` + `hooks/useNowPlaying.js` with the new methods;
-  build a search screen (that part is then OTA-iterable).
+### What to do at rebuild time
+1. **(Catalog only) Apple Developer portal:** enable the **MusicKit** app service for App ID
+   `com.whir.consolecommand`. This grants the entitlement; MusicKit's Swift API then handles
+   tokens via `MusicAuthorization.request()` (no manual developer token). Without this, the
+   catalog methods just return empty/nil — they won't crash.
+2. `eas build -p ios --profile production` (registers the staged native methods).
+3. Then build the search UI purely over the air, guarded by `AppleMusic.capabilities`.
 
-### 2. Library browse/search via MPMediaQuery (cheaper, library-only)
-If a full-catalog search isn't wanted, a smaller add covers the local library:
-- `getAllSongs(limit?)` → `MPMediaQuery.songs()`
-- `searchLibrary(term)` → `MPMediaQuery` + `MPMediaPropertyPredicate` (title/artist CONTAINS)
-- `getAlbums()` / `getArtists()` if useful
-These are MediaPlayer additions (no MusicKit), but still native → rebuild.
+### Staged native methods
+- **Library (works on rebuild, no entitlement):**
+  `searchLibrarySongs(term, limit)`, `getAllSongs(limit)`, `playLibrarySongs(persistentIDs)`
+  — MPMediaQuery over your added/downloaded songs (search by title/artist/album, then play).
+- **Catalog (needs MusicKit service):**
+  `searchCatalogSongs(term, limit)`, `requestMusicKitAuthorization()`,
+  `getNowPlayingCatalogArtworkURL(size)` — reliable streaming artwork URL for the current track.
+- Podspec now links `MusicKit` in addition to `MediaPlayer`.
 
 ## Notes
 - When rebuilding, also re-verify the one-build-forever assumptions (no new native deps
