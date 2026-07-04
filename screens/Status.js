@@ -226,15 +226,21 @@ export default function Status({ navigation }) {
 
           {/* NAV */}
           <Reveal index={6}>
-            <View style={styles.row}>
-              <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
-                <Text style={styles.navText}>CONTROLS</Text>
-                <Text style={styles.navArrow}>→</Text>
+            <View style={{ gap: space.sm }}>
+              <Pressable onPress={() => navigation.navigate('NowPlaying')} style={styles.npBtn}>
+                <Text style={styles.npText}>▶  NOW PLAYING</Text>
+                <Text style={styles.npArrow}>→</Text>
               </Pressable>
-              <Pressable onPress={() => navigation.navigate('Grundig1')} style={[styles.navBtn]}>
-                <Text style={styles.navText}>GRUNDIG1</Text>
-                <Text style={styles.navArrow}>→</Text>
-              </Pressable>
+              <View style={styles.row}>
+                <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
+                  <Text style={styles.navText}>CONTROLS</Text>
+                  <Text style={styles.navArrow}>→</Text>
+                </Pressable>
+                <Pressable onPress={() => navigation.navigate('Grundig1')} style={[styles.navBtn]}>
+                  <Text style={styles.navText}>GRUNDIG1</Text>
+                  <Text style={styles.navArrow}>→</Text>
+                </Pressable>
+              </View>
             </View>
           </Reveal>
             </>
@@ -326,4 +332,11 @@ const styles = StyleSheet.create({
   },
   navText: { ...type.tag, color: color.textHi, fontSize: 12 },
   navArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
+  npBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: color.panel, borderWidth: border.thick, borderColor: color.accent,
+    borderRadius: radius.none, paddingVertical: space.md, paddingHorizontal: space.lg,
+  },
+  npText: { ...type.tag, color: color.textHi, fontSize: 13 },
+  npArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
 });

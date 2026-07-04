@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import StatusScreen from './screens/Status';
 import ControlsScreen from './screens/Controls';
+import NowPlayingScreen from './screens/NowPlaying';
 import Grundig1Screen from './screens/grundig1';
 import { Grundig1Provider } from './screens/grundig1/state/grundig1Store';
 import { color } from './theme/tokens';
@@ -29,6 +30,11 @@ export default function App() {
         >
           <Stack.Screen name="Status" component={StatusScreen} />
           <Stack.Screen name="Controls" component={ControlsScreen} />
+          <Stack.Screen
+            name="NowPlaying"
+            component={NowPlayingScreen}
+            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+          />
           <Stack.Screen
             name="Grundig1"
             component={Grundig1Screen}
