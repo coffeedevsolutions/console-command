@@ -126,9 +126,13 @@ export default function Status({ navigation }) {
             </View>
           </View>
 
+          {/* Below-hero content mounts (and cascades up) only once the intro's
+              wireframe has settled — see onReveal in AppIntro. */}
+          {reveal && (
+            <>
           {/* CONNECTION (when disconnected or opened) */}
           {(showSettings || !conn.connected) && (
-            <Reveal index={0} play={reveal}>
+            <Reveal index={0}>
               <Panel label="Link" code="HTTP·80" ticks contentStyle={styles.stack}>
                 <TextInput
                   value={urlDraft}
@@ -162,7 +166,7 @@ export default function Status({ navigation }) {
           )}
 
           {/* SOURCE — primary control */}
-          <Reveal index={1} play={reveal}>
+          <Reveal index={1}>
             <Panel label="Input Source" code={switching ? 'SWITCHING…' : `ACTIVE·${activeSource === 'turntable' ? 'IN1' : 'IN2'}`} ticks contentStyle={styles.stack}>
               <View style={styles.sourceRow}>
                 {SOURCES.map((s) => {
@@ -195,7 +199,7 @@ export default function Status({ navigation }) {
           </Reveal>
 
           {/* LOCK */}
-          <Reveal index={2} play={reveal}>
+          <Reveal index={2}>
             <Panel label="Lock Code" code="6-DIGIT" contentStyle={styles.stack}>
               <TextInput
                 value={lockCode}
@@ -212,16 +216,16 @@ export default function Status({ navigation }) {
           </Reveal>
 
           {/* LIGHTING */}
-          <Reveal index={3} play={reveal}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
-          <Reveal index={4} play={reveal}>
+          <Reveal index={3}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
+          <Reveal index={4}>
             <LidLightCard passwordLocked={conn.locked} lockCode={lockCode} />
           </Reveal>
-          <Reveal index={5} play={reveal}>
+          <Reveal index={5}>
             <LedSegmentCard passwordLocked={conn.locked} lockCode={lockCode} lidLightState={lidLightState} />
           </Reveal>
 
           {/* NAV */}
-          <Reveal index={6} play={reveal}>
+          <Reveal index={6}>
             <View style={styles.row}>
               <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
                 <Text style={styles.navText}>CONTROLS</Text>
@@ -233,6 +237,8 @@ export default function Status({ navigation }) {
               </Pressable>
             </View>
           </Reveal>
+            </>
+          )}
 
           <View style={{ height: space.huge }} />
         </ScrollView>

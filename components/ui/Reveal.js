@@ -1,7 +1,7 @@
 // components/ui/Reveal.js
-// Wraps a section so it slides up from below into its resting place when `play`
-// turns true. Give each sibling an increasing `index` for a staggered, overlapping
-// cascade (multiple in motion at once, but starting one after another).
+// Slides its children up from below into place, fading in, when it MOUNTS.
+// Mount it (conditionally) at the moment you want the cascade to start, and give
+// each sibling an increasing `index` for a staggered, overlapping reveal.
 import { useEffect } from 'react';
 import Animated, {
   Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming,
@@ -9,9 +9,8 @@ import Animated, {
 
 export default function Reveal({
   index = 0,
-  play,
-  stagger = 85,
-  distance = 46,
+  stagger = 90,
+  distance = 48,
   duration = 520,
   style,
   children,
@@ -19,13 +18,13 @@ export default function Reveal({
   const p = useSharedValue(0);
 
   useEffect(() => {
-    if (play) {
-      p.value = withDelay(index * stagger, withTiming(1, {
-        duration,
-        easing: Easing.out(Easing.cubic),
-      }));
-    }
-  }, [play, index, stagger, duration, p]);
+    p.value = withDelay(index * stagger, withTiming(1, {
+      duration,
+      easing: Easing.out(Easing.cubic),
+    }));
+    // Animate once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const aStyle = useAnimatedStyle(() => ({
     opacity: p.value,
