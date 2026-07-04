@@ -9,6 +9,7 @@ import { dsp } from '../api/dspClient';
 import { useConnection } from '../hooks/useConnection';
 import { useGrundig1Store } from './grundig1/state/grundig1Store';
 import { useLidLight } from '../hooks/useLidLight';
+import { useNowPlaying } from '../hooks/useNowPlaying';
 import LidLightCard from '../components/LidLightCard';
 import LedSegmentCard from '../components/LedSegmentCard';
 import DottedGrid from '../components/ui/DottedGrid';
@@ -18,6 +19,11 @@ import Reveal from '../components/ui/Reveal';
 import { color, radius, border, space, type } from '../theme/tokens';
 
 const CONSOLE_IMG = require('../assets/images/grundig-ks-680-wireframe-partial-open.png');
+
+function fmt(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 const SOURCES = [
   { key: 'turntable', label: 'PHONO', caption: 'TURNTABLE · VINYL', code: 'IN·1' },
@@ -42,6 +48,7 @@ export default function Status({ navigation }) {
   const heroImgRef = useRef(null);
 
   const lidLightState = useLidLight({ code: lockCode, pollingInterval: 3000 });
+  const np = useNowPlaying({ pollMs: 1000, loadArtwork: false });
 
   useEffect(() => { setUrlDraft(conn.baseUrl); }, [conn.baseUrl]);
   useEffect(() => {
@@ -130,9 +137,22 @@ export default function Status({ navigation }) {
               wireframe has settled — see onReveal in AppIntro. */}
           {reveal && (
             <>
+          {/* NOW PLAYING mini-bar — above input source, part of the cascade */}
+          <Reveal index={0}>
+            <Pressable onPress={() => navigation.navigate('NowPlaying')} style={styles.npBar}>
+              <View style={styles.npBarLeft}>
+                <Text style={styles.npBarTitle} numberOfLines={1}>{np.track?.title || 'NOW PLAYING'}</Text>
+                <Text style={styles.npBarArtist} numberOfLines={1}>
+                  {np.track?.artist || 'APPLE MUSIC'}
+                </Text>
+              </View>
+              <Text style={styles.npBarTime}>{np.track ? fmt(np.pb?.currentTime) : '→'}</Text>
+            </Pressable>
+          </Reveal>
+
           {/* CONNECTION (when disconnected or opened) */}
           {(showSettings || !conn.connected) && (
-            <Reveal index={0}>
+            <Reveal index={1}>
               <Panel label="Link" code="HTTP·80" ticks contentStyle={styles.stack}>
                 <TextInput
                   value={urlDraft}
@@ -166,7 +186,7 @@ export default function Status({ navigation }) {
           )}
 
           {/* SOURCE — primary control */}
-          <Reveal index={1}>
+          <Reveal index={2}>
             <Panel label="Input Source" code={switching ? 'SWITCHING…' : `ACTIVE·${activeSource === 'turntable' ? 'IN1' : 'IN2'}`} ticks contentStyle={styles.stack}>
               <View style={styles.sourceRow}>
                 {SOURCES.map((s) => {
@@ -199,7 +219,7 @@ export default function Status({ navigation }) {
           </Reveal>
 
           {/* LOCK */}
-          <Reveal index={2}>
+          <Reveal index={3}>
             <Panel label="Lock Code" code="6-DIGIT" contentStyle={styles.stack}>
               <TextInput
                 value={lockCode}
@@ -216,31 +236,25 @@ export default function Status({ navigation }) {
           </Reveal>
 
           {/* LIGHTING */}
-          <Reveal index={3}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
-          <Reveal index={4}>
+          <Reveal index={4}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
+          <Reveal index={5}>
             <LidLightCard passwordLocked={conn.locked} lockCode={lockCode} />
           </Reveal>
-          <Reveal index={5}>
+          <Reveal index={6}>
             <LedSegmentCard passwordLocked={conn.locked} lockCode={lockCode} lidLightState={lidLightState} />
           </Reveal>
 
           {/* NAV */}
-          <Reveal index={6}>
-            <View style={{ gap: space.sm }}>
-              <Pressable onPress={() => navigation.navigate('NowPlaying')} style={styles.npBtn}>
-                <Text style={styles.npText}>▶  NOW PLAYING</Text>
-                <Text style={styles.npArrow}>→</Text>
+          <Reveal index={7}>
+            <View style={styles.row}>
+              <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
+                <Text style={styles.navText}>CONTROLS</Text>
+                <Text style={styles.navArrow}>→</Text>
               </Pressable>
-              <View style={styles.row}>
-                <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
-                  <Text style={styles.navText}>CONTROLS</Text>
-                  <Text style={styles.navArrow}>→</Text>
-                </Pressable>
-                <Pressable onPress={() => navigation.navigate('Grundig1')} style={[styles.navBtn]}>
-                  <Text style={styles.navText}>GRUNDIG1</Text>
-                  <Text style={styles.navArrow}>→</Text>
-                </Pressable>
-              </View>
+              <Pressable onPress={() => navigation.navigate('Grundig1')} style={[styles.navBtn]}>
+                <Text style={styles.navText}>GRUNDIG1</Text>
+                <Text style={styles.navArrow}>→</Text>
+              </Pressable>
             </View>
           </Reveal>
             </>
@@ -332,11 +346,13 @@ const styles = StyleSheet.create({
   },
   navText: { ...type.tag, color: color.textHi, fontSize: 12 },
   navArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
-  npBtn: {
+  npBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: color.panel, borderWidth: border.thick, borderColor: color.accent,
-    borderRadius: radius.none, paddingVertical: space.md, paddingHorizontal: space.lg,
+    borderRadius: radius.none, paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.md,
   },
-  npText: { ...type.tag, color: color.textHi, fontSize: 13 },
-  npArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
+  npBarLeft: { flex: 1 },
+  npBarTitle: { ...type.h2, fontSize: 15, color: color.textHi },
+  npBarArtist: { ...type.meta, color: color.accent, marginTop: 2 },
+  npBarTime: { ...type.meta, color: color.textMid },
 });

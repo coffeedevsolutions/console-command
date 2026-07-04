@@ -1,10 +1,10 @@
 // screens/NowPlaying.js — full-screen Apple Music "Now Playing", schematic styling.
-// Immersive: no close button until you tap the screen, then the X shows for 5s and
-// fades. Responsive portrait/landscape with a fluid animated reflow on rotation.
-// Pure JS on the baked Apple Music module → ships OTA.
+// Immersive: chrome (close + playlists) is hidden until you tap; tapping elsewhere
+// hides it again; it also auto-fades after 5s. Responsive portrait/landscape with a
+// fluid animated reflow. Pure JS on the baked Apple Music module → ships OTA.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Image, Pressable, StyleSheet, Text, useWindowDimensions, View,
+  Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -30,25 +30,54 @@ export default function NowPlaying({ navigation }) {
   const insets = useSafeAreaInsets();
   const landscape = W > H;
 
-  // Album art is ALWAYS a square; sized by the constraining dimension.
   const artSize = landscape
     ? Math.min(H - insets.top - insets.bottom - 72, 460)
     : Math.min(W - space.xl * 2, 460);
 
   const [trackW, setTrackW] = useState(0);
-  const chrome = useSharedValue(0);
   const [chromeInteractive, setChromeInteractive] = useState(false);
+  const [playlistsOpen, setPlaylistsOpen] = useState(false);
+  const [playlists, setPlaylists] = useState([]);
+  const chrome = useSharedValue(0);
   const hideTimer = useRef(null);
+  const plOpenRef = useRef(false);
+  useEffect(() => { plOpenRef.current = playlistsOpen; }, [playlistsOpen]);
 
   const reveal = useCallback(() => {
     setChromeInteractive(true);
     chrome.value = withTiming(1, { duration: 200 });
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
+      if (plOpenRef.current) return; // stay up while browsing playlists
       chrome.value = withTiming(0, { duration: 550, easing: Easing.in(Easing.quad) });
       setChromeInteractive(false);
     }, CHROME_HOLD_MS);
   }, [chrome]);
+
+  const hideChrome = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    chrome.value = withTiming(0, { duration: 300, easing: Easing.in(Easing.quad) });
+    setChromeInteractive(false);
+    setPlaylistsOpen(false);
+  }, [chrome]);
+
+  const toggleChrome = useCallback(() => {
+    if (chromeInteractive) hideChrome(); else reveal();
+  }, [chromeInteractive, hideChrome, reveal]);
+
+  const togglePlaylists = useCallback(async () => {
+    if (playlistsOpen) { setPlaylistsOpen(false); reveal(); return; }
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setPlaylistsOpen(true);
+    try { setPlaylists((await controls.getPlaylists()) || []); }
+    catch { setPlaylists([]); }
+  }, [playlistsOpen, reveal, controls]);
+
+  const selectPlaylist = useCallback((id) => {
+    controls.playPlaylist(id);
+    setPlaylistsOpen(false);
+    reveal();
+  }, [controls, reveal]);
 
   useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
 
@@ -89,12 +118,11 @@ export default function NowPlaying({ navigation }) {
   return (
     <View style={styles.root}>
       <DottedGrid />
-      <Pressable style={styles.flex} onPress={reveal}>
+      <Pressable style={styles.flex} onPress={toggleChrome}>
         <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
           <Text style={styles.eyebrow}>NOW PLAYING · APPLE MUSIC</Text>
 
           <Animated.View style={[styles.content, landscape ? styles.contentLandscape : styles.contentPortrait]}>
-            {/* Artwork (square) */}
             <Animated.View layout={REFLOW} style={[styles.artWrap, { width: artSize, height: artSize }]}>
               <Tick corner="tl" offset={-12} size={16} />
               <Tick corner="tr" offset={-12} size={16} />
@@ -109,7 +137,6 @@ export default function NowPlaying({ navigation }) {
               )}
             </Animated.View>
 
-            {/* Info + controls */}
             <Animated.View layout={REFLOW} style={[styles.rightCol, landscape && styles.rightColLandscape]}>
               <View style={styles.meta}>
                 <Text style={styles.title} numberOfLines={2}>{track?.title || '—'}</Text>
@@ -119,7 +146,7 @@ export default function NowPlaying({ navigation }) {
                 <Text style={styles.album} numberOfLines={1}>{track?.albumTitle || ''}</Text>
               </View>
 
-              <View style={styles.progressBlock}>
+              <View>
                 <Pressable
                   onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
                   onPress={(e) => seekAt(e.nativeEvent.locationX)}
@@ -158,16 +185,34 @@ export default function NowPlaying({ navigation }) {
         </SafeAreaView>
       </Pressable>
 
-      {/* Close button — hidden until a tap reveals it (auto-fades after 5s) */}
+      {/* Chrome: close + playlists, hidden until a tap reveals it (auto-fades after 5s) */}
       <Animated.View
-        style={[styles.closeWrap, chromeStyle]}
+        style={[styles.chrome, { paddingTop: insets.top + space.sm, paddingHorizontal: space.md }, chromeStyle]}
         pointerEvents={chromeInteractive ? 'box-none' : 'none'}
       >
-        <SafeAreaView edges={['top', 'right']}>
+        <View style={styles.chromeBar}>
+          <Pressable onPress={togglePlaylists} style={styles.plToggle}>
+            <Text style={styles.plToggleText}>{playlistsOpen ? 'PLAYLISTS ▲' : 'PLAYLISTS ▾'}</Text>
+          </Pressable>
           <Pressable onPress={() => navigation.goBack()} hitSlop={16} style={styles.closeBtn}>
             <Text style={styles.closeGlyph}>×</Text>
           </Pressable>
-        </SafeAreaView>
+        </View>
+
+        {playlistsOpen && (
+          <View style={[styles.plPanel, { maxHeight: H * 0.62 }]}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {playlists.length === 0 ? (
+                <Text style={styles.plEmpty}>NO PLAYLISTS FOUND</Text>
+              ) : playlists.map((pl) => (
+                <Pressable key={pl.id} onPress={() => selectPlaylist(pl.id)} style={styles.plRow}>
+                  <Text style={styles.plName} numberOfLines={1}>{pl.name}</Text>
+                  <Text style={styles.plCount}>{pl.count}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </Animated.View>
     </View>
   );
@@ -219,7 +264,6 @@ const styles = StyleSheet.create({
   artist: { fontFamily: font.mono, fontSize: 13, letterSpacing: 1, color: color.accent },
   album: { fontFamily: font.mono, fontSize: 12, letterSpacing: 1, color: color.textMid },
 
-  progressBlock: {},
   track: { height: 8, borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.bgSunken, overflow: 'hidden', justifyContent: 'center' },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: color.accent },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
@@ -238,12 +282,31 @@ const styles = StyleSheet.create({
     borderWidth: border.thick, borderColor: color.accent, backgroundColor: color.accent,
   },
 
-  closeWrap: { position: 'absolute', top: 0, right: 0, padding: space.md, zIndex: 20 },
+  chrome: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
+  chromeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  plToggle: {
+    borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.panel,
+    paddingVertical: space.sm, paddingHorizontal: space.md,
+  },
+  plToggleText: { fontFamily: font.mono, fontSize: 12, letterSpacing: 2, color: color.textHi },
   closeBtn: {
     width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
     borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.panel,
   },
   closeGlyph: { color: color.textHi, fontSize: 24, lineHeight: 26, fontWeight: '700' },
+
+  plPanel: {
+    marginTop: space.sm, borderWidth: border.thick, borderColor: color.accent,
+    backgroundColor: color.panel,
+  },
+  plRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: space.md, paddingHorizontal: space.md,
+    borderBottomWidth: border.hair, borderBottomColor: color.line,
+  },
+  plName: { flex: 1, fontFamily: font.display, fontSize: 15, fontWeight: '700', color: color.textHi, marginRight: space.md },
+  plCount: { fontFamily: font.mono, fontSize: 12, color: color.textLow },
+  plEmpty: { fontFamily: font.mono, fontSize: 12, letterSpacing: 2, color: color.textLow, padding: space.lg, textAlign: 'center' },
 
   guardCenter: { alignItems: 'center', justifyContent: 'center', gap: space.md },
   guardTitle: { fontFamily: font.display, fontSize: 22, fontWeight: '800', color: color.textHi, letterSpacing: -0.2 },

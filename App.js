@@ -1,6 +1,7 @@
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { useKeepAwake } from 'expo-keep-awake';
 import StatusScreen from './screens/Status';
 import ControlsScreen from './screens/Controls';
 import NowPlayingScreen from './screens/NowPlaying';
@@ -17,6 +18,7 @@ const navTheme = {
 };
 
 export default function App() {
+  useKeepAwake(); // keep the console display on while the app is open
   return (
     <Grundig1Provider>
       <StatusBar style="light" />
