@@ -70,7 +70,7 @@ public class AppleMusicModule: Module {
     Function("playPlaylist") { (playlistId: String) in self.playPlaylist(playlistId) }
     Function("playStoreIDs") { (ids: [String]) in
       self.player.setQueue(with: ids)
-      self.player.play()
+      self.startPlayback()
     }
     Function("appendStoreIDs") { (ids: [String]) in
       self.player.append(MPMusicPlayerStoreQueueDescriptor(storeIDs: ids))
@@ -182,7 +182,14 @@ public class AppleMusicModule: Module {
                                                       forProperty: MPMediaPlaylistPropertyPersistentID))
     guard let collection = query.collections?.first else { return }
     player.setQueue(with: collection)
-    player.play()
+    startPlayback()
+  }
+
+  // Reliable cold start: prepare the freshly-set queue, then play (on the main queue).
+  private func startPlayback() {
+    player.prepareToPlay { [weak self] _ in
+      DispatchQueue.main.async { self?.player.play() }
+    }
   }
 
   // MARK: - Library search helpers (MediaPlayer)
@@ -217,7 +224,7 @@ public class AppleMusicModule: Module {
     let items = all.filter { wanted.contains($0.persistentID) }
     if items.isEmpty { return }
     player.setQueue(with: MPMediaItemCollection(items: items))
-    player.play()
+    startPlayback()
   }
 
   // MARK: - Catalog helpers (MusicKit)
