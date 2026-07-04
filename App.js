@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
+import * as Updates from 'expo-updates';
 import StatusScreen from './screens/Status';
 import ControlsScreen from './screens/Controls';
 import NowPlayingScreen from './screens/NowPlaying';
@@ -19,6 +21,22 @@ const navTheme = {
 
 export default function App() {
   useKeepAwake(); // keep the console display on while the app is open
+
+  // Apply OTA updates promptly: check on launch, and if one is available fetch it
+  // and reload into it (instead of waiting for a second manual relaunch).
+  useEffect(() => {
+    if (__DEV__ || !Updates.isEnabled) return;
+    (async () => {
+      try {
+        const res = await Updates.checkForUpdateAsync();
+        if (res.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch { /* offline or no update — ignore */ }
+    })();
+  }, []);
+
   return (
     <Grundig1Provider>
       <StatusBar style="light" />
