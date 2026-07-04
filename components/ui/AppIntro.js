@@ -59,10 +59,15 @@ export default function AppIntro({ targetFrame, onReveal, onFinish }) {
     transition.value = withDelay(TRANSITION_DELAY, withTiming(
       1,
       { duration: TRANSITION_DUR, easing: Easing.inOut(Easing.cubic) },
-      (finished) => { if (finished) runOnJS(onFinish)(); },
+      (finished) => {
+        if (finished) {
+          // Only once the wireframe has fully settled in its header spot: start the
+          // content cascade, then remove this overlay.
+          runOnJS(onReveal)();
+          runOnJS(onFinish)();
+        }
+      },
     ));
-    const t = setTimeout(() => onReveal && onReveal(), TRANSITION_DELAY);
-    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
