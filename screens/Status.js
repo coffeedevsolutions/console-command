@@ -1,6 +1,6 @@
 // screens/Status.js — Command Center (main screen the app loads into)
 // Aesthetic: hi-fi schematic × neo-brutalism. All styling pulls from theme/tokens.js.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
@@ -13,6 +13,8 @@ import LidLightCard from '../components/LidLightCard';
 import LedSegmentCard from '../components/LedSegmentCard';
 import DottedGrid from '../components/ui/DottedGrid';
 import Panel, { Tick } from '../components/ui/Panel';
+import AppIntro from '../components/ui/AppIntro';
+import Reveal from '../components/ui/Reveal';
 import { color, radius, border, space, type } from '../theme/tokens';
 
 const CONSOLE_IMG = require('../assets/images/grundig-ks-680-wireframe-partial-open.png');
@@ -31,6 +33,13 @@ export default function Status({ navigation }) {
   const [showSettings, setShowSettings] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [optimisticSource, setOptimisticSource] = useState(null);
+
+  // Launch animation: measure the hero wireframe as the fly-to target, then play
+  // the splash → reveal sequence once.
+  const [target, setTarget] = useState(null);
+  const [intro, setIntro] = useState(true);
+  const [reveal, setReveal] = useState(false);
+  const heroImgRef = useRef(null);
 
   const lidLightState = useLidLight({ code: lockCode, pollingInterval: 3000 });
 
@@ -85,7 +94,15 @@ export default function Status({ navigation }) {
               <Text style={styles.heroModel}>GRUNDIG · KS-680</Text>
               <Text style={styles.heroModel}>REV.A / PARTIAL-OPEN</Text>
             </View>
-            <Image source={CONSOLE_IMG} style={styles.console} resizeMode="contain" />
+            <Image
+              ref={heroImgRef}
+              onLayout={() => heroImgRef.current?.measureInWindow((x, y, w, h) => {
+                if (w > 0 && !target) setTarget({ x, y, width: w, height: h });
+              })}
+              source={CONSOLE_IMG}
+              style={styles.console}
+              resizeMode="contain"
+            />
             <View style={styles.crosshairRow}>
               <View style={styles.hline} />
               <Text style={styles.heroTitle}>COMMAND CENTER</Text>
@@ -111,109 +128,132 @@ export default function Status({ navigation }) {
 
           {/* CONNECTION (when disconnected or opened) */}
           {(showSettings || !conn.connected) && (
-            <Panel label="Link" code="HTTP·80" ticks contentStyle={styles.stack}>
-              <TextInput
-                value={urlDraft}
-                onChangeText={setUrlDraft}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                placeholder="http://console.local"
-                placeholderTextColor={color.textLow}
-                style={styles.input}
-              />
-              <View style={styles.btnRow}>
-                <Pressable onPress={applyUrl} style={[styles.btn, styles.btnPrimary]}>
-                  <Text style={styles.btnPrimaryText}>CONNECT</Text>
-                </Pressable>
-                <Pressable onPress={() => setUrlDraft('http://console.local')} style={[styles.btn, styles.btnGhost]}>
-                  <Text style={styles.btnGhostText}>console.local</Text>
-                </Pressable>
-                {!conn.connected && (
-                  <Pressable onPress={conn.reconnectNow} style={[styles.btn, styles.btnGhost]}>
-                    <Text style={styles.btnGhostText}>RETRY</Text>
+            <Reveal index={0} play={reveal}>
+              <Panel label="Link" code="HTTP·80" ticks contentStyle={styles.stack}>
+                <TextInput
+                  value={urlDraft}
+                  onChangeText={setUrlDraft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  placeholder="http://console.local"
+                  placeholderTextColor={color.textLow}
+                  style={styles.input}
+                />
+                <View style={styles.btnRow}>
+                  <Pressable onPress={applyUrl} style={[styles.btn, styles.btnPrimary]}>
+                    <Text style={styles.btnPrimaryText}>CONNECT</Text>
                   </Pressable>
-                )}
-              </View>
-              <Text style={styles.hint}>
-                Assign a fixed DHCP reservation so the console always answers here. iOS will
-                ask to allow Local Network on first connect — tap Allow.
-              </Text>
-            </Panel>
+                  <Pressable onPress={() => setUrlDraft('http://console.local')} style={[styles.btn, styles.btnGhost]}>
+                    <Text style={styles.btnGhostText}>console.local</Text>
+                  </Pressable>
+                  {!conn.connected && (
+                    <Pressable onPress={conn.reconnectNow} style={[styles.btn, styles.btnGhost]}>
+                      <Text style={styles.btnGhostText}>RETRY</Text>
+                    </Pressable>
+                  )}
+                </View>
+                <Text style={styles.hint}>
+                  Assign a fixed DHCP reservation so the console always answers here. iOS will
+                  ask to allow Local Network on first connect — tap Allow.
+                </Text>
+              </Panel>
+            </Reveal>
           )}
 
           {/* SOURCE — primary control */}
-          <Panel label="Input Source" code={switching ? 'SWITCHING…' : `ACTIVE·${activeSource === 'turntable' ? 'IN1' : 'IN2'}`} ticks contentStyle={styles.stack}>
-            <View style={styles.sourceRow}>
-              {SOURCES.map((s) => {
-                const active = activeSource === s.key;
-                const disabled = !conn.connected || switching;
-                return (
-                  <Pressable
-                    key={s.key}
-                    onPress={() => switchSource(s.key)}
-                    disabled={disabled}
-                    style={({ pressed }) => [
-                      styles.source,
-                      active ? styles.sourceOn : styles.sourceOff,
-                      disabled && !active && styles.sourceDisabled,
-                      pressed && { opacity: 0.9 },
-                    ]}
-                  >
-                    <View style={styles.sourceHead}>
-                      <View style={[styles.sBlock, { backgroundColor: active ? color.accentInk : color.lineStrong }]} />
-                      <Text style={[styles.sCode, active && { color: color.accentInk }]}>{s.code}</Text>
-                    </View>
-                    <Text style={[styles.sLabel, active && { color: color.accentInk }]}>{s.label}</Text>
-                    <Text style={[styles.sCaption, active && { color: color.accentInk }]}>{s.caption}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {!conn.connected && <Text style={styles.hint}>Connect to switch the source.</Text>}
-          </Panel>
+          <Reveal index={1} play={reveal}>
+            <Panel label="Input Source" code={switching ? 'SWITCHING…' : `ACTIVE·${activeSource === 'turntable' ? 'IN1' : 'IN2'}`} ticks contentStyle={styles.stack}>
+              <View style={styles.sourceRow}>
+                {SOURCES.map((s) => {
+                  const active = activeSource === s.key;
+                  const disabled = !conn.connected || switching;
+                  return (
+                    <Pressable
+                      key={s.key}
+                      onPress={() => switchSource(s.key)}
+                      disabled={disabled}
+                      style={({ pressed }) => [
+                        styles.source,
+                        active ? styles.sourceOn : styles.sourceOff,
+                        disabled && !active && styles.sourceDisabled,
+                        pressed && { opacity: 0.9 },
+                      ]}
+                    >
+                      <View style={styles.sourceHead}>
+                        <View style={[styles.sBlock, { backgroundColor: active ? color.accentInk : color.lineStrong }]} />
+                        <Text style={[styles.sCode, active && { color: color.accentInk }]}>{s.code}</Text>
+                      </View>
+                      <Text style={[styles.sLabel, active && { color: color.accentInk }]}>{s.label}</Text>
+                      <Text style={[styles.sCaption, active && { color: color.accentInk }]}>{s.caption}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {!conn.connected && <Text style={styles.hint}>Connect to switch the source.</Text>}
+            </Panel>
+          </Reveal>
 
           {/* LOCK */}
-          <Panel label="Lock Code" code="6-DIGIT" contentStyle={styles.stack}>
-            <TextInput
-              value={lockCode}
-              onChangeText={(code) => dispatch({ type: actions.SET_LOCK_CODE, code })}
-              keyboardType="numeric"
-              maxLength={6}
-              secureTextEntry
-              placeholder="— — — — — —"
-              placeholderTextColor={color.textLow}
-              style={[styles.input, styles.inputMono]}
-            />
-            <Text style={styles.hint}>Only required while the console is locked.</Text>
-          </Panel>
+          <Reveal index={2} play={reveal}>
+            <Panel label="Lock Code" code="6-DIGIT" contentStyle={styles.stack}>
+              <TextInput
+                value={lockCode}
+                onChangeText={(code) => dispatch({ type: actions.SET_LOCK_CODE, code })}
+                keyboardType="numeric"
+                maxLength={6}
+                secureTextEntry
+                placeholder="— — — — — —"
+                placeholderTextColor={color.textLow}
+                style={[styles.input, styles.inputMono]}
+              />
+              <Text style={styles.hint}>Only required while the console is locked.</Text>
+            </Panel>
+          </Reveal>
 
-          {/* LIGHTING (framed now; internals tokenized later) */}
-          <Text style={styles.groupLabel}>◦ LIGHTING</Text>
-          <LidLightCard passwordLocked={conn.locked} lockCode={lockCode} />
-          <LedSegmentCard passwordLocked={conn.locked} lockCode={lockCode} lidLightState={lidLightState} />
+          {/* LIGHTING */}
+          <Reveal index={3} play={reveal}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
+          <Reveal index={4} play={reveal}>
+            <LidLightCard passwordLocked={conn.locked} lockCode={lockCode} />
+          </Reveal>
+          <Reveal index={5} play={reveal}>
+            <LedSegmentCard passwordLocked={conn.locked} lockCode={lockCode} lidLightState={lidLightState} />
+          </Reveal>
 
           {/* NAV */}
-          <View style={styles.row}>
-            <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
-              <Text style={styles.navText}>CONTROLS</Text>
-              <Text style={styles.navArrow}>→</Text>
-            </Pressable>
-            <Pressable onPress={() => navigation.navigate('Grundig1')} style={[styles.navBtn]}>
-              <Text style={styles.navText}>GRUNDIG1</Text>
-              <Text style={styles.navArrow}>→</Text>
-            </Pressable>
-          </View>
+          <Reveal index={6} play={reveal}>
+            <View style={styles.row}>
+              <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
+                <Text style={styles.navText}>CONTROLS</Text>
+                <Text style={styles.navArrow}>→</Text>
+              </Pressable>
+              <Pressable onPress={() => navigation.navigate('Grundig1')} style={[styles.navBtn]}>
+                <Text style={styles.navText}>GRUNDIG1</Text>
+                <Text style={styles.navArrow}>→</Text>
+              </Pressable>
+            </View>
+          </Reveal>
 
           <View style={{ height: space.huge }} />
         </ScrollView>
       </SafeAreaView>
+
+      {/* Launch sequence overlay (splash → fly-to-header → content cascade) */}
+      {intro && target && (
+        <AppIntro
+          targetFrame={target}
+          onReveal={() => setReveal(true)}
+          onFinish={() => setIntro(false)}
+        />
+      )}
+      {intro && !target && <View style={styles.introCover} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
+  introCover: { ...StyleSheet.absoluteFillObject, backgroundColor: color.bg, zIndex: 100 },
   safe: { flex: 1 },
   scroll: { padding: space.lg, gap: space.md },
 
