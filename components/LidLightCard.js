@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Switch, TouchableOpacity, TextInput, StyleSheet, PanResponder } from 'react-native';
 import { useLidLight } from '../hooks/useLidLight';
+import { theme } from '../theme/tokens';
+
+const T = theme; // tokens (imported as `theme` to avoid clashing with the hook's `color`)
 
 /**
  * Lid Light control card component
@@ -35,6 +38,7 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
   const isDragging = useRef(false);
   const pendingBrightnessRef = useRef(null);
   const brightnessTimerRef = useRef(null);
+  const hasPendingBrightnessChange = useRef(false);
 
   // Update RGB inputs when color changes
   useEffect(() => {
@@ -45,9 +49,9 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
     }
   }, [color]);
 
-  // Update slider brightness when brightness changes (only if not dragging)
+  // Update slider brightness when brightness changes (only if not dragging or pending change)
   useEffect(() => {
-    if (!isDragging.current) {
+    if (!isDragging.current && !hasPendingBrightnessChange.current) {
       setSliderBrightness(brightness);
     }
   }, [brightness]);
@@ -73,10 +77,11 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
   // Handle brightness change (debounced)
   const handleBrightnessChange = (value) => {
     const clampedValue = Math.max(0, Math.min(100, Math.round(value)));
-    // Only send to API if value has changed significantly
-    if (Math.abs(clampedValue - brightness) >= 1) {
-      setBrightness(clampedValue);
-    }
+    console.log('[LidLightCard] handleBrightnessChange called with:', clampedValue);
+    // Send to API - always trust the slider value
+    setBrightness(clampedValue);
+    // Clear the pending flag after sending
+    hasPendingBrightnessChange.current = false;
   };
 
   // Handle preset selection
@@ -103,17 +108,38 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
   // Create pan responder for brightness slider with debouncing
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !controlsDisabled && sliderLayoutRef.current.width > 0,
-      onMoveShouldSetPanResponder: () => !controlsDisabled && sliderLayoutRef.current.width > 0,
+      onStartShouldSetPanResponder: () => {
+        console.log('[PanResponder] onStartShouldSetPanResponder - controlsDisabled:', controlsDisabled, 'width:', sliderLayoutRef.current.width);
+        return !controlsDisabled && sliderLayoutRef.current.width > 0;
+      },
+      onStartShouldSetPanResponderCapture: () => {
+        // Capture the touch immediately, don't let parent views intercept
+        return !controlsDisabled && sliderLayoutRef.current.width > 0;
+      },
+      onMoveShouldSetPanResponder: () => {
+        return !controlsDisabled && sliderLayoutRef.current.width > 0;
+      },
+      onMoveShouldSetPanResponderCapture: () => {
+        // Keep control during movement
+        return true;
+      },
+      onPanResponderTerminationRequest: () => {
+        // Don't allow other components to terminate our gesture
+        console.log('[PanResponder] Termination requested - DENIED');
+        return false;
+      },
       onPanResponderGrant: (evt) => {
+        console.log('[PanResponder] onPanResponderGrant - touch started');
         // Cancel any pending API call if user starts dragging again
         if (brightnessTimerRef.current) {
           clearTimeout(brightnessTimerRef.current);
           brightnessTimerRef.current = null;
+          hasPendingBrightnessChange.current = false;
         }
         
         isDragging.current = true;
         const newValue = calculateBrightnessFromTouch(evt.nativeEvent.pageX);
+        console.log('[PanResponder] Calculated brightness:', newValue);
         setSliderBrightness(newValue);
         pendingBrightnessRef.current = newValue;
       },
@@ -123,6 +149,7 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
         pendingBrightnessRef.current = newValue;
       },
       onPanResponderRelease: () => {
+        console.log('[PanResponder] onPanResponderRelease - touch released, pendingBrightness:', pendingBrightnessRef.current);
         isDragging.current = false;
         
         // Clear any existing timer
@@ -133,16 +160,23 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
         // Set new timer - only send after 1.5 seconds of no movement
         if (pendingBrightnessRef.current !== null) {
           const valueToSend = pendingBrightnessRef.current;
+          console.log('[LidLightCard] Slider released, starting 1.5s timer for value:', valueToSend);
+          hasPendingBrightnessChange.current = true; // Prevent polling from overwriting
           brightnessTimerRef.current = setTimeout(() => {
+            console.log('[LidLightCard] Timer fired, calling handleBrightnessChange');
             handleBrightnessChange(valueToSend);
             brightnessTimerRef.current = null;
           }, 1500);
           pendingBrightnessRef.current = null;
+        } else {
+          console.log('[PanResponder] No pending brightness value to send');
         }
       },
       onPanResponderTerminate: () => {
+        console.log('[PanResponder] onPanResponderTerminate - gesture cancelled');
         isDragging.current = false;
         pendingBrightnessRef.current = null;
+        hasPendingBrightnessChange.current = false;
         
         // Cancel pending API call on terminate
         if (brightnessTimerRef.current) {
@@ -193,11 +227,6 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
         <Text style={styles.loadingText}>Loading...</Text>
       )}
 
-      {/* Error Display */}
-      {error && (
-        <Text style={styles.errorText}>{error}</Text>
-      )}
-
       {/* Power Control */}
       <View style={styles.controlSection}>
         <Text style={styles.controlLabel}>Power:</Text>
@@ -205,6 +234,9 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
           value={isOn}
           onValueChange={handlePowerToggle}
           disabled={controlsDisabled}
+          trackColor={{ false: T.color.lineStrong, true: T.color.accent }}
+          thumbColor={T.color.textHi}
+          ios_backgroundColor={T.color.lineStrong}
         />
       </View>
 
@@ -223,6 +255,7 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
               sliderLayoutRef.current = { x: pageX, y: pageY, width, height };
             });
           }}
+          onStartShouldSetResponderCapture={() => true}
           {...panResponder.panHandlers}
         >
           <View style={styles.sliderRail} />
@@ -331,168 +364,63 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
 
 const styles = StyleSheet.create({
   card: {
-    gap: 12,
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#fff',
+    gap: T.space.md,
+    padding: T.space.lg,
+    borderRadius: T.radius.none,
+    borderWidth: T.border.hair,
+    borderColor: T.color.line,
+    backgroundColor: T.color.panel,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...T.type.tag,
+    fontSize: 11,
+    color: T.color.textMid,
+    textTransform: 'uppercase',
   },
-  statusSection: {
-    gap: 6,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    minWidth: 80,
-  },
-  statusValue: {
-    fontSize: 14,
-  },
+  statusSection: { gap: T.space.sm },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: T.space.sm },
+  statusLabel: { ...T.type.meta, color: T.color.textLow, minWidth: 90, textTransform: 'uppercase' },
+  statusValue: { ...T.type.meta, color: T.color.textHi },
   colorSwatch: {
-    width: 40,
-    height: 24,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#999',
+    width: 40, height: 22, borderRadius: T.radius.none,
+    borderWidth: T.border.thick, borderColor: T.color.lineStrong,
   },
-  loadingText: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#d00',
-  },
-  controlSection: {
-    gap: 8,
-  },
-  controlLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  brightnessHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  brightnessValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  sliderContainer: {
-    height: 40,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderRail: {
-    height: 6,
-    backgroundColor: '#E5E5EA',
-    borderRadius: 3,
-  },
-  sliderTrack: {
-    position: 'absolute',
-    height: 6,
-    backgroundColor: '#007AFF',
-    borderRadius: 3,
-  },
+  loadingText: { ...T.type.meta, color: T.color.textLow },
+  errorText: { ...T.type.meta, color: T.color.danger },
+  controlSection: { gap: T.space.sm },
+  controlLabel: { ...T.type.meta, color: T.color.textMid, textTransform: 'uppercase' },
+  brightnessHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  brightnessValue: { ...T.type.meta, color: T.color.accent, fontSize: 12 },
+  sliderContainer: { height: 40, justifyContent: 'center', position: 'relative' },
+  sliderRail: { height: 4, backgroundColor: T.color.bgSunken, borderWidth: T.border.hair, borderColor: T.color.lineStrong },
+  sliderTrack: { position: 'absolute', height: 4, backgroundColor: T.color.accent },
   sliderThumb: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#007AFF',
-    borderWidth: 3,
-    borderColor: '#fff',
-    marginLeft: -12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
+    position: 'absolute', width: 16, height: 22, borderRadius: T.radius.none,
+    backgroundColor: T.color.accent, borderWidth: T.border.thick, borderColor: T.color.accentInk,
+    marginLeft: -8,
   },
-  sliderThumbDisabled: {
-    opacity: 0.5,
-  },
-  presetsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  sliderThumbDisabled: { opacity: 0.5 },
+  presetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: T.space.sm },
   presetChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#E5E5EA',
-    borderWidth: 1,
-    borderColor: '#C7C7CC',
+    paddingVertical: T.space.sm, paddingHorizontal: T.space.md, borderRadius: T.radius.none,
+    backgroundColor: T.color.bgSunken, borderWidth: T.border.thick, borderColor: T.color.lineStrong,
   },
-  presetChipDisabled: {
-    opacity: 0.5,
-  },
-  presetChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#000',
-  },
-  rgbInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rgbInputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  rgbLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  presetChipDisabled: { opacity: 0.5 },
+  presetChipText: { ...T.type.meta, color: T.color.textHi, letterSpacing: 1 },
+  rgbInputRow: { flexDirection: 'row', alignItems: 'center', gap: T.space.sm },
+  rgbInputGroup: { flexDirection: 'row', alignItems: 'center', gap: T.space.xs },
+  rgbLabel: { ...T.type.meta, color: T.color.textMid },
   rgbInput: {
-    width: 50,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    padding: 6,
-    fontSize: 14,
-    textAlign: 'center',
+    width: 50, borderWidth: T.border.thick, borderColor: T.color.lineStrong, borderRadius: T.radius.none,
+    padding: T.space.sm, ...T.type.meta, color: T.color.textHi, textAlign: 'center',
   },
   applyButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: '#007AFF',
-    marginLeft: 'auto',
+    paddingVertical: T.space.sm, paddingHorizontal: T.space.lg, borderRadius: T.radius.none,
+    backgroundColor: T.color.accent, marginLeft: 'auto',
   },
-  applyButtonDisabled: {
-    opacity: 0.5,
-  },
-  applyButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  lockedText: {
-    fontSize: 12,
-    color: '#f80',
-    fontStyle: 'italic',
-  },
-  pendingText: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
+  applyButtonDisabled: { opacity: 0.5 },
+  applyButtonText: { ...T.type.btn, fontSize: 12, color: T.color.accentInk },
+  lockedText: { ...T.type.meta, color: T.color.warn },
+  pendingText: { ...T.type.meta, color: T.color.textLow },
 });
 

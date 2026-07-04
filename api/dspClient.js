@@ -2,8 +2,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = '@dsp.baseUrl';
-// Put your ESP32's LAN IP here as the initial default (STA mode), e.g. http://192.168.1.42
-let baseUrl = 'http://192.168.1.42';
+// Default to the ESP32's mDNS hostname so the app keeps working even when the
+// router hands the device a different DHCP IP. The firmware advertises itself as
+// "console" via mDNS (ESPmDNS -> console.local, _http._tcp on port 80).
+// A user-entered LAN IP (e.g. http://192.168.1.42) is persisted in AsyncStorage
+// and overrides this default on next launch.
+let baseUrl = 'http://console.local';
 
 export async function setBaseUrl(url) {
   // normalize: strip trailing slash
@@ -165,7 +169,76 @@ export const dsp = {
 
   // Set lid light brightness (0-100%)
   async setLidLightBrightness(brightness, code) {
-    return request(withCode('/api/lidlight/brightness', code), { method: 'POST', body: { brightness } });
+    const url = withCode('/api/lidlight/brightness', code);
+    const body = { brightness };
+    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
+    return request(url, { method: 'POST', body });
+  },
+
+  // === LED Segment API ===
+
+  // Get segment status
+  async getSegmentStatus(code) {
+    const url = withCode('/api/segments/status', code);
+    console.log('[dspClient] GET', url);
+    const result = await request(url, { timeout: 5000 });
+    console.log('[dspClient] GET /api/segments/status response:', JSON.stringify(result));
+    return result;
+  },
+
+  // Set segment color (segment: 1 or 2)
+  async setSegmentColor(segment, r, g, b, code) {
+    const url = withCode('/api/segments/color', code);
+    const body = { segment, r, g, b };
+    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
+    const result = await request(url, { 
+      method: 'POST', 
+      body 
+    });
+    console.log('[dspClient] POST /api/segments/color response:', JSON.stringify(result));
+    return result;
+  },
+
+  // Set segment brightness (segment: 1 or 2, brightness: 0-100)
+  async setSegmentBrightness(segment, brightness, code) {
+    const url = withCode('/api/segments/brightness', code);
+    const body = { segment, brightness };
+    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
+    const result = await request(url, { 
+      method: 'POST', 
+      body 
+    });
+    console.log('[dspClient] POST /api/segments/brightness response:', JSON.stringify(result));
+    return result;
+  },
+
+  // Set link mode (linked: boolean, copySettings: optional boolean)
+  async setSegmentLinkMode(linked, copySettings, code) {
+    const url = withCode('/api/segments/link', code);
+    const body = { linked };
+    if (copySettings !== undefined) {
+      body.copySettings = copySettings;
+    }
+    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
+    const result = await request(url, { 
+      method: 'POST', 
+      body 
+    });
+    console.log('[dspClient] POST /api/segments/link response:', JSON.stringify(result));
+    return result;
+  },
+
+  // Enable/disable segment (segment: 1 or 2, enabled: boolean)
+  async setSegmentEnabled(segment, enabled, code) {
+    const url = withCode('/api/segments/config', code);
+    const body = { segment, enabled };
+    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
+    const result = await request(url, { 
+      method: 'POST', 
+      body 
+    });
+    console.log('[dspClient] POST /api/segments/config response:', JSON.stringify(result));
+    return result;
   },
 
   // optional realtime updates if your firmware exposes ws://<ip>/ws

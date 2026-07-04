@@ -1,3 +1,7 @@
+// Must be the very first import so react-native-gesture-handler initializes
+// its native side before anything else renders.
+import 'react-native-gesture-handler';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

@@ -2,19 +2,41 @@
   "expo": {
     "name": "console-command",
     "slug": "console-command",
+    "owner": "whir",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "orientation": "default",
+    "icon": "./assets/control-panel-icon.png",
     "userInterfaceStyle": "light",
+    "runtimeVersion": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.whir.consolecommand",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Console Command connects to your Whir console over the local network to send control commands.",
+        "NSAppleMusicUsageDescription": "Console Command shows what's playing and lets you control Apple Music playback that's streaming to the console.",
+        "NSBonjourServices": [
+          "_http._tcp"
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
+      "package": "com.whir.consolecommand",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -22,6 +44,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-audio",
+      "expo-secure-store",
+      "expo-updates"
+    ]
   }
 }
