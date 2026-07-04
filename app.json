@@ -18,6 +18,7 @@
     },
     "updates": {
       "enabled": true,
+      "url": "https://u.expo.dev/a512f2cb-f81d-4c59-a045-07f772527d51",
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
@@ -40,7 +41,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -50,6 +55,11 @@
       "expo-audio",
       "expo-secure-store",
       "expo-updates"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a512f2cb-f81d-4c59-a045-07f772527d51"
+      }
+    }
   }
 }
