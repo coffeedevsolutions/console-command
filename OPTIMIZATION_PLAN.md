@@ -21,6 +21,46 @@ native/firmware (rebuild/reflash), reviewed to the same depth.
 
 ---
 
+## Phase A — Remove dead & hardware-impossible functionality · *do first; shrinks everything below* (app: OTA · firmware: next flash)
+Two features don't match reality and should be **deleted, not optimized**. Doing this first
+removes ~1000+ LOC, a whole 3s poll, and **nullifies the only hardware-visible caveat in the plan
+(1.3)**.
+
+### A.1 Remove the LED "segments" (vent/main can't be differentiated in hardware)
+- **Why:** the addressable LEDs all follow a single instruction set — there is no independent
+  per-zone color/brightness. The two-segment model (lid + vent + linked mode) can't do anything the
+  hardware honors.
+- **Impact:** deletes `components/LedSegmentCard.js` (606 LOC), `hooks/useLedSegments.js` (407), the
+  linked-sync effect, and the `/api/segments/status` 3s poll. Keep **`LidLightCard`** as the single
+  lighting controller (color, brightness, on/off, presets). Optionally move the `ColorPicker` color
+  wheel into `LidLightCard` (nicer than its RGB text inputs) instead of deleting it.
+- **Hardware-safety:** ✅ app removal is safe — the lid controller drives the whole (mirrored) strip.
+  **Firmware pairing (next flash):** revert `applyLedBrightness` to a single whole-strip fill and
+  drop `/api/segments/*` + vent state; the current two-zone renderer assumes per-pixel addressing the
+  hardware doesn't have.
+- **Files (app, OTA):** delete `LedSegmentCard.js`, `hooks/useLedSegments.js`; remove from
+  `screens/Status.js`; drop the `setSegment*`/`getSegmentStatus` methods in `api/dspClient.js`.
+  **Firmware:** `console-esp/console-esp32/console-esp32.ino`.
+- **Nullifies Phase 1.3** (no app-orchestrated LED sync remains).
+- **Effort:** S (app) · **Research:** decide ColorPicker fate. · **OTA:** app ✅ / firmware ❌
+
+### A.2 Remove the lock code
+- **Why:** unused; the 6-digit-PIN-to-lock-the-console feature isn't wanted.
+- **Impact:** deletes the Lock Code panel, the `lockCode`/`passwordLocked` threading through the
+  hooks/cards, the `?code=` (`withCode`) plumbing in `dspClient`, and `SET_LOCK_CODE`/`global.lockCode`
+  in the Grundig store. Simplifies many signatures. **Also moots the Phase 1.4 lock-code-wipe bug**
+  (no lock code to wipe).
+- **Hardware-safety:** ✅ firmware defaults to unlocked, so `/api/lock` + `requireCodeIfLocked` sit
+  dormant — removing the app side changes nothing physical. **Firmware pairing (optional, next
+  flash):** delete `/api/lock` + the gates for tidiness.
+- **Files (app, OTA):** `screens/Status.js` (panel + lockCode), `hooks/useLidLight.js`,
+  `screens/Library.js` + `hooks/useNowPlaying`/`NowPlaying.js` (drop the `code`/`lockCode` args on
+  `setSource`/lidlight calls), `api/dspClient.js` (drop `withCode`), `grundig1Store.js`. **Firmware
+  (optional):** `console-esp32.ino`.
+- **Effort:** S–M · **Research:** grep every `lockCode`/`passwordLocked`/`code` usage. · **OTA:** app ✅ / firmware ❌ (optional)
+
+---
+
 ## Phase 0 — Render & log hygiene · *zero hardware risk* (OTA)
 Pure CPU/GC wins. Nothing here touches a network call or a hardware command, so the console
 behaves identically.
@@ -89,16 +129,10 @@ makes polling **focus-aware, background-aware, and coordinated**.
   Consumers: `Status.js`, `LidLightCard.js`, `LedSegmentCard.js`.
 - **Effort:** L · **Research:** map every field each hook exposes so nothing regresses. · **OTA:** ✅
 
-### 1.3 ⚠️ Linked-segment sync — the one hardware-visible tradeoff
-- **What:** linked mode is **app-orchestrated**: `LedSegmentCard.js:195-255` watches the lid-light
-  poll and POSTs `setSegmentColor/Brightness` so the **vent LEDs follow the lid light**. If 1.1
-  pauses the lid poll while `Status` is unfocused, the vent LEDs **stop following** until you return.
-- **Hardware-safety:** ⚠️ intentional behavior change while unfocused. Mitigations: (a) keep a slow
-  lid/segment **heartbeat while `linkMode==='linked'` AND Status focused**; (b) accept that
-  following pauses when you're on another screen (the lid light itself is unaffected); (c) **best:
-  move linking into firmware** (Phase 5.3) so the app poll isn't in the loop at all.
-- **Files:** `components/LedSegmentCard.js`, `hooks/useLidLight.js`.
-- **Effort:** S (guard) · **Research:** confirm desired behavior with real hardware. · **OTA:** ✅
+### 1.3 ~~Linked-segment sync caveat~~ — REMOVED by Phase A.1
+No longer applies: the LED segments and their app-orchestrated sync are deleted in A.1, so **no
+hardware-visible polling tradeoff remains** — the lid-light poll is purely display state. Phase 5.3
+(firmware link-mode) is dropped for the same reason.
 
 ### 1.4 Gate the Grundig store's 5s poll
 - **Impact:** `grundig1Store.js:471-491` fetches full `/api/state` every 5s **app-wide** (the
@@ -198,16 +232,10 @@ These need a native build or a firmware flash, so batch them with other native w
   serializers). **Firmware rebuild + flash.**
 - **Effort:** M · **Research:** JSON size vs `StaticJsonDocument` capacity on the ESP32-S3. · **OTA:** ❌
 
-### 5.3 Move link-mode into firmware → removes the Phase 1.3 caveat
-- **Impact:** when linked, have the firmware mirror lid color/brightness onto the vent segment
-  internally, so the app never polls-and-pushes to keep them in sync. Eliminates that whole app
-  loop and its focus-gating tradeoff.
-- **Hardware-safety:** ⚠️ changes where linking is computed (app → firmware); behavior should match.
-  Keep the app's link toggle (`/api/segments/link`) driving the firmware flag.
-- **Files:** `console-esp32.ino` (apply lid updates to the vent range when `segLinked`), then remove
-  the app-side sync effect in `LedSegmentCard.js`. **Firmware rebuild + flash.**
-- **Effort:** M · **Research:** reconcile with the existing `segLinked` handling. · **OTA:** firmware ❌,
-  app-side removal ✅ (after firmware ships).
+### 5.3 ~~Firmware link-mode~~ — DROPPED (superseded by Phase A.1)
+Segments are removed entirely, so there's nothing to link. Instead, the paired firmware task is
+**revert `applyLedBrightness` to a single whole-strip fill and delete the `/api/segments/*`
+endpoints + vent state** (next flash), matching the hardware that drives all LEDs identically.
 
 ### 5.4 Optional: drop `react-native-audio-api`
 - **Impact:** FFmpeg-backed, currently baked but **unused**; adds binary size + a little startup.
@@ -219,8 +247,8 @@ These need a native build or a firmware flash, so batch them with other native w
 ## Verification (per phase)
 1. **Builds:** `npx expo export --platform ios` must bundle clean after each phase.
 2. **Hardware still responds** (on the physical console + iPad): source switch (Phono↔Bluetooth),
-   lid-light power/brightness/color, LED segments **including linked-mode follow**, now-playing
-   transport + playlist play, Library playlist play + auto-Bluetooth.
+   lid-light power/brightness/color, now-playing transport + playlist play, Library playlist play +
+   auto-Bluetooth. (Segments no longer exist after A.1.)
 3. **Battery/thermal check:** leave the app idle on the command center ~15–20 min; note case warmth
    and battery % before/after, and confirm polls pause when NowPlaying/Library is on top (add a
    temporary `__DEV__` log or watch the ESP32 serial for request cadence).
@@ -228,9 +256,11 @@ These need a native build or a firmware flash, so batch them with other native w
    poll/hardware items (Phase 1, 3, 4, 5) require the physical console to confirm no regression.
 
 ## Suggested rollout
-1. **OTA #1:** Phase 0 (0.1–0.3) — tiny, zero-risk, immediate.
-2. **OTA #2:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win, with the 1.3 heartbeat guard).
-3. **OTA #3:** Phase 2 (Now Playing provider + progress isolation).
-4. **OTA #4:** Phase 3 (sliders) + Phase 4 (store fix) when touching those files.
-5. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 + 5.3.
-6. Consider Phase 1.2 (coordinator) once 5.2 lands so it collapses to a single request.
+1. **OTA #1:** **Phase A** (remove segments + lock code) — biggest readability/perf win, deletes a
+   poll, and clears the plan's only hardware caveat. Do this first.
+2. **OTA #2:** Phase 0 (0.1–0.3) — tiny, zero-risk render/log hygiene (0.3 folds into A.1).
+3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free).
+4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation).
+5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix).
+6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 +
+   single-zone LED revert (5.3), and optionally delete `/api/lock`.
