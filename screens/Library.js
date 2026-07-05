@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { dsp } from '../api/dspClient';
 import AppleMusic, { capabilities } from '../modules/apple-music';
 import DottedGrid from '../components/ui/DottedGrid';
+import { Tick } from '../components/ui/Panel';
 import { color, border, space, type, font } from '../theme/tokens';
 
 // Fixed row height lets FlatList use getItemLayout (O(1) scroll-to-index for the
@@ -34,6 +35,7 @@ export default function Library({ navigation, route }) {
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [nowKey, setNowKey] = useState(null);
+  const [scrubLetter, setScrubLetter] = useState(null); // letter under the finger while scrubbing
 
   const src = catOK ? source : 'library'; // locked to library until catalog is built
   const searching = query.trim().length > 0;
@@ -48,7 +50,10 @@ export default function Library({ navigation, route }) {
     }
     if (view === 'songs' && libSearchOK && songs === null) {
       setBusy(true);
-      AppleMusic.getAllSongs(300)
+      // limit 0 = the whole library. The native side returns songs by iOS sort-title (articles
+      // stripped) and any cap slices off the alphabet — "The …" songs bucket under T, etc. — so we
+      // pull everything and sort by display title in JS to get a full A–Z scrubber.
+      AppleMusic.getAllSongs(0)
         .then((list) => setSongs(sortByField(list, 'title')))
         .catch(() => setSongs([]))
         .finally(() => setBusy(false));
@@ -106,9 +111,7 @@ export default function Library({ navigation, route }) {
     const map = {};
     const letters = [];
     for (let i = 0; i < scrubData.length; i++) {
-      const raw = (scrubData[i][scrubField] || '').trim();
-      const ch = raw ? raw[0].toUpperCase() : '#';
-      const L = ch >= 'A' && ch <= 'Z' ? ch : '#';
+      const L = bucketOf(scrubData[i][scrubField]);
       if (!(L in map)) { map[L] = i; letters.push(L); }
     }
     return { map, letters };
@@ -214,24 +217,43 @@ export default function Library({ navigation, route }) {
                 ? <ActivityIndicator color={color.accent} style={{ marginTop: space.xl }} />
                 : <Empty text={searching ? 'NO RESULTS' : 'NOTHING HERE'} />}
             />
-            {scrubIndex && <ScrubBar letters={scrubIndex.letters} onScrub={scrubTo} />}
+            {scrubIndex && (
+              <ScrubBar
+                letters={scrubIndex.letters}
+                onScrub={(L) => { setScrubLetter(L); scrubTo(L); }}
+                onScrubEnd={() => setScrubLetter(null)}
+              />
+            )}
           </View>
         )}
       </SafeAreaView>
+      {scrubLetter && <ScrubOverlay letter={scrubLetter} />}
     </View>
   );
 }
 
-// Case-insensitive alphabetical sort by a field, non-mutating.
-function sortByField(list, field) {
-  return Array.isArray(list)
-    ? [...list].sort((a, b) => (a?.[field] || '').localeCompare(b?.[field] || '', undefined, { sensitivity: 'base' }))
-    : [];
+// First-letter "bucket" for the scrubber: A–Z, or '#' for anything non-alphabetic (numbers/symbols).
+function bucketOf(s) {
+  const ch = (s || '').trim().charAt(0).toUpperCase();
+  return ch >= 'A' && ch <= 'Z' ? ch : '#';
 }
 
-// Vertical A–Z index down the right edge. Touch-tracks the finger (no per-frame network —
-// only fires scrollTo when the letter under the finger changes).
-function ScrubBar({ letters, onScrub }) {
+// Case-insensitive alphabetical sort by a field, non-mutating. A–Z first; '#' (numbers/symbols)
+// sorted to the END so they land at the bottom of both the list and the scrubber.
+function sortByField(list, field) {
+  if (!Array.isArray(list)) return [];
+  return [...list].sort((a, b) => {
+    const ha = bucketOf(a?.[field]) === '#';
+    const hb = bucketOf(b?.[field]) === '#';
+    if (ha !== hb) return ha ? 1 : -1;
+    return (a?.[field] || '').localeCompare(b?.[field] || '', undefined, { sensitivity: 'base' });
+  });
+}
+
+// Vertical A–Z index down the right edge, spread over the full container height. Touch-tracks the
+// finger (no per-frame network — only fires scrollTo when the letter under the finger changes);
+// onScrubEnd fires on release so the caller can dismiss the on-screen letter overlay.
+function ScrubBar({ letters, onScrub, onScrubEnd }) {
   const heightRef = useRef(0);
   const lastRef = useRef(null);
   const pick = useCallback((locationY) => {
@@ -241,6 +263,7 @@ function ScrubBar({ letters, onScrub }) {
     const L = letters[Math.floor(rel * letters.length)];
     if (L && L !== lastRef.current) { lastRef.current = L; onScrub(L); }
   }, [letters, onScrub]);
+  const end = useCallback(() => { lastRef.current = null; onScrubEnd?.(); }, [onScrubEnd]);
   return (
     <View
       style={styles.scrubBar}
@@ -249,12 +272,28 @@ function ScrubBar({ letters, onScrub }) {
       onMoveShouldSetResponder={() => true}
       onResponderGrant={(e) => pick(e.nativeEvent.locationY)}
       onResponderMove={(e) => pick(e.nativeEvent.locationY)}
-      onResponderRelease={() => { lastRef.current = null; }}
-      onResponderTerminate={() => { lastRef.current = null; }}
+      onResponderRelease={end}
+      onResponderTerminate={end}
     >
       {letters.map((L) => (
         <Text key={L} style={styles.scrubLetter} allowFontScaling={false}>{L}</Text>
       ))}
+    </View>
+  );
+}
+
+// Big schematic letter that appears center-screen while scrubbing, so you can see where you are
+// before lifting your finger. Non-interactive (pointerEvents none) so it never blocks the scrub.
+function ScrubOverlay({ letter }) {
+  return (
+    <View style={styles.scrubOverlay} pointerEvents="none">
+      <View style={styles.scrubGlyphBox}>
+        <Tick corner="tl" offset={-6} size={16} />
+        <Tick corner="tr" offset={-6} size={16} />
+        <Tick corner="bl" offset={-6} size={16} />
+        <Tick corner="br" offset={-6} size={16} />
+        <Text style={styles.scrubGlyph} allowFontScaling={false}>{letter}</Text>
+      </View>
     </View>
   );
 }
@@ -334,8 +373,16 @@ const styles = StyleSheet.create({
   segTextOn: { color: color.accentInk, fontWeight: '700' },
 
   listWrap: { flex: 1, flexDirection: 'row' },
-  scrubBar: { width: 22, alignItems: 'center', justifyContent: 'center', paddingVertical: space.xs },
-  scrubLetter: { fontFamily: font.mono, fontSize: 9, lineHeight: 13, letterSpacing: 0.5, color: color.accent, fontWeight: '700' },
+  // space-between spreads the letters across the whole list height so the bar is easy to hit.
+  scrubBar: { width: 24, alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.sm },
+  scrubLetter: { fontFamily: font.mono, fontSize: 10, letterSpacing: 0.5, color: color.accent, fontWeight: '700' },
+
+  scrubOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  scrubGlyphBox: {
+    width: 140, height: 140, alignItems: 'center', justifyContent: 'center',
+    borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.bgSunken,
+  },
+  scrubGlyph: { fontFamily: font.mono, fontSize: 76, fontWeight: '800', letterSpacing: 2, color: color.accent },
 
   row: { height: ROW_HEIGHT, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.md, borderBottomWidth: border.hair, borderBottomColor: color.line, backgroundColor: color.panel, gap: space.md },
   rowPressed: { backgroundColor: color.panelAlt },
