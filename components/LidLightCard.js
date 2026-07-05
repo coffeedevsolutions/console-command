@@ -26,6 +26,7 @@ export default function LidLightCard() {
   } = useLidLight({ pollingInterval: 3000 });
 
   const [sliderBrightness, setSliderBrightness] = useState(0);
+  const [colorOpen, setColorOpen] = useState(false); // color wheel collapsed by default
   const sliderLayoutRef = useRef({ x: 0, y: 0, width: 300, height: 40 });
   const isDragging = useRef(false);
   const pendingBrightnessRef = useRef(null);
@@ -266,14 +267,23 @@ export default function LidLightCard() {
         </View>
       </View>
 
-      {/* Custom color */}
+      {/* Custom color — collapsible; the SVG wheel only mounts when open */}
       <View style={styles.controlSection}>
-        <Text style={styles.controlLabel}>Custom Color:</Text>
-        <ColorPicker
-          color={color}
-          onChange={(c) => setRgb(c.r, c.g, c.b)}
-          disabled={controlsDisabled}
-        />
+        <TouchableOpacity
+          style={styles.dropdownHeader}
+          onPress={() => setColorOpen((o) => !o)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.controlLabel}>Custom Color</Text>
+          <Text style={styles.dropdownChevron}>{colorOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {colorOpen && (
+          <ColorPicker
+            color={color}
+            onChange={(c) => setRgb(c.r, c.g, c.b)}
+            disabled={controlsDisabled}
+          />
+        )}
       </View>
 
       {/* Pending Action Indicator */}
@@ -311,6 +321,12 @@ const styles = StyleSheet.create({
   errorText: { ...T.type.meta, color: T.color.danger },
   controlSection: { gap: T.space.sm },
   controlLabel: { ...T.type.meta, color: T.color.textMid, textTransform: 'uppercase' },
+  dropdownHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: T.border.thick, borderColor: T.color.lineStrong, backgroundColor: T.color.bgSunken,
+    paddingVertical: T.space.sm, paddingHorizontal: T.space.md,
+  },
+  dropdownChevron: { color: T.color.accent, fontSize: 12 },
   brightnessHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brightnessValue: { ...T.type.meta, color: T.color.accent, fontSize: 12 },
   sliderContainer: { height: 40, justifyContent: 'center', position: 'relative' },

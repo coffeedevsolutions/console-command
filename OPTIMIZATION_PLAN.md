@@ -244,6 +244,42 @@ endpoints + vent state** (next flash), matching the hardware that drives all LED
 
 ---
 
+## Phase 6 — UX features, built to the perf rules above (OTA) · *shipped*
+
+New user-facing features are held to the same render/network discipline as the optimization
+phases — no feature is allowed to reintroduce the drag Phase 0–2 removed.
+
+### 6.1 Collapse the lid-light color wheel into a dropdown
+- **Feature:** the SVG `ColorPicker` wheel now lives behind a `Custom Color ▾` toggle in
+  `LidLightCard` instead of always being on screen.
+- **Perf tie-in:** the wheel is **conditionally rendered** (`{colorOpen && <ColorPicker/>}`), so
+  the SVG isn't mounted or re-rendered while collapsed — it costs nothing until opened. Aligns with
+  Phase 0.1 (stop rendering heavy SVG on every tick).
+- **Files:** `components/LidLightCard.js`. **Effort:** XS · **OTA:** ✅.
+
+### 6.2 Alphabet scrubber on the Library browse lists
+- **Feature:** a vertical A–Z index down the right edge of the Playlists/Songs lists; drag a finger
+  to jump to that letter's first entry (iOS Contacts-style). Browse lists are now sorted
+  alphabetically so the index is meaningful. Search results are left in match order (no scrubber).
+- **Perf tie-in — three plan patterns applied at once:**
+  - **`getItemLayout` + fixed `ROW_HEIGHT`** → O(1) `scrollToIndex` and no per-row measurement pass;
+    also makes FlatList virtualization cheaper for the 300-song list.
+  - **Memoized `Row`** (`React.memo`) with stable primitive/callback props (`onPress` is a
+    `useCallback`, `arg` is a primitive/stable ref) → rows skip re-render on unrelated parent
+    setState; only the row whose `active` flag flips re-renders on selection. Directly realizes the
+    Phase 0.1 memoization goal for the list.
+  - **Touch-tracked scrubbing without per-frame work** → the `ScrubBar` responder fires
+    `scrollToIndex` **only when the letter under the finger changes** (guarded by a `lastRef`), so a
+    drag is a handful of O(1) scrolls, not a per-frame loop. No network involved.
+- **Files:** `screens/Library.js`. **Effort:** S · **OTA:** ✅.
+
+### 6.3 Firmware TODO recorded
+- A `TODO` block was added atop `console-esp32/console-esp32.ino` mirroring Phase A + 5.2/5.3 so the
+  next flash reverts the LEDs to single-zone, deletes `/api/segments/*` (+ optionally `/api/lock`),
+  and can add the consolidated `GET /api/state`. Non-OTA; tracked here for the next firmware pass.
+
+---
+
 ## Verification (per phase)
 1. **Builds:** `npx expo export --platform ios` must bundle clean after each phase.
 2. **Hardware still responds** (on the physical console + iPad): source switch (Phono↔Bluetooth),
@@ -264,3 +300,6 @@ endpoints + vent state** (next flash), matching the hardware that drives all LED
 5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix).
 6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 +
    single-zone LED revert (5.3), and optionally delete `/api/lock`.
+
+**Shipped alongside Phase A:** Phase 6.1 (color-wheel dropdown) + 6.2 (Library alphabet scrubber),
+both built to the render/network rules above. 6.3 (firmware TODO) is queued for the next flash.

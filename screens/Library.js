@@ -3,7 +3,7 @@
 // PLAYLISTS/SONGS browse. Selecting anything plays it and, if the console is on
 // Phono, switches it to Bluetooth first. Capability-gated so it never calls a native
 // method that isn't in the running build.
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View,
 } from 'react-native';
@@ -12,6 +12,10 @@ import { dsp } from '../api/dspClient';
 import AppleMusic, { capabilities } from '../modules/apple-music';
 import DottedGrid from '../components/ui/DottedGrid';
 import { color, border, space, type, font } from '../theme/tokens';
+
+// Fixed row height lets FlatList use getItemLayout (O(1) scroll-to-index for the
+// alphabet scrubber + no per-row measurement pass) and keeps the list virtualized cheaply.
+const ROW_HEIGHT = 60;
 
 export default function Library({ navigation, route }) {
   const available = AppleMusic.isAvailable;
@@ -38,11 +42,16 @@ export default function Library({ navigation, route }) {
   useEffect(() => {
     if (auth !== 'authorized' || searching || src !== 'library') return;
     if (view === 'playlists' && playlists === null) {
-      AppleMusic.getPlaylists().then(setPlaylists).catch(() => setPlaylists([]));
+      AppleMusic.getPlaylists()
+        .then((list) => setPlaylists(sortByField(list, 'name')))
+        .catch(() => setPlaylists([]));
     }
     if (view === 'songs' && libSearchOK && songs === null) {
       setBusy(true);
-      AppleMusic.getAllSongs(300).then(setSongs).catch(() => setSongs([])).finally(() => setBusy(false));
+      AppleMusic.getAllSongs(300)
+        .then((list) => setSongs(sortByField(list, 'title')))
+        .catch(() => setSongs([]))
+        .finally(() => setBusy(false));
     }
   }, [auth, searching, src, view, libSearchOK, playlists, songs]);
 
@@ -87,6 +96,29 @@ export default function Library({ navigation, route }) {
     AppleMusic.playPlaylist(id);
   }, [ensureBluetooth]);
 
+  // Alphabet scrubber: build a { letter -> first row index } map over the sorted browse
+  // list. Null while searching or when the list is too short to be worth scrubbing.
+  const flatListRef = useRef(null);
+  const scrubData = searching ? null : (view === 'playlists' ? playlists : (libSearchOK ? songs : null));
+  const scrubField = view === 'playlists' ? 'name' : 'title';
+  const scrubIndex = useMemo(() => {
+    if (!scrubData || scrubData.length < 2) return null;
+    const map = {};
+    const letters = [];
+    for (let i = 0; i < scrubData.length; i++) {
+      const raw = (scrubData[i][scrubField] || '').trim();
+      const ch = raw ? raw[0].toUpperCase() : '#';
+      const L = ch >= 'A' && ch <= 'Z' ? ch : '#';
+      if (!(L in map)) { map[L] = i; letters.push(L); }
+    }
+    return { map, letters };
+  }, [scrubData, scrubField]);
+
+  const scrubTo = useCallback((letter) => {
+    const idx = scrubIndex?.map[letter];
+    if (idx != null) flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+  }, [scrubIndex]);
+
   if (!available || auth === 'denied' || auth === 'restricted') {
     return <Guard onClose={() => navigation.goBack()}
       title={!available ? 'MODULE UNAVAILABLE' : 'ACCESS DENIED'}
@@ -110,14 +142,20 @@ export default function Library({ navigation, route }) {
     cur = !libSearchOK ? { locked: true } : { kind: 'song', data: songs || [] };
   }
 
+  // Stable primitive/callback props so the memoized Row only re-renders when its own
+  // fields change (e.g. its active flag), not on every parent poll/state tick.
   const renderItem = ({ item }) => {
-    if (cur.kind === 'playlist') {
-      return <Row primary={item.name} secondary={`${item.count} TRACKS`}
-        active={nowKey === 'pl:' + item.id} onPress={() => playPlaylist(item.id)} />;
-    }
-    const key = item.persistentID ? 'sg:' + item.persistentID : 'cs:' + item.id;
-    return <Row primary={item.title} secondary={item.artist}
-      active={nowKey === key} onPress={() => playSong(item)} />;
+    const isPl = cur.kind === 'playlist';
+    const key = isPl ? 'pl:' + item.id : (item.persistentID ? 'sg:' + item.persistentID : 'cs:' + item.id);
+    return (
+      <Row
+        primary={isPl ? item.name : item.title}
+        secondary={isPl ? `${item.count} TRACKS` : item.artist}
+        active={nowKey === key}
+        onPress={isPl ? playPlaylist : playSong}
+        arg={isPl ? item.id : item}
+      />
+    );
   };
 
   return (
@@ -161,18 +199,62 @@ export default function Library({ navigation, route }) {
         {cur.locked ? (
           <Locked />
         ) : (
-          <FlatList
-            data={cur.data}
-            renderItem={renderItem}
-            keyExtractor={(item, i) => item.id || item.persistentID || String(i)}
-            style={styles.flex}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={busy
-              ? <ActivityIndicator color={color.accent} style={{ marginTop: space.xl }} />
-              : <Empty text={searching ? 'NO RESULTS' : 'NOTHING HERE'} />}
-          />
+          <View style={styles.listWrap}>
+            <FlatList
+              ref={flatListRef}
+              data={cur.data}
+              renderItem={renderItem}
+              keyExtractor={(item, i) => item.id || item.persistentID || String(i)}
+              style={styles.flex}
+              getItemLayout={(_, index) => ({ length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index })}
+              onScrollToIndexFailed={() => {}}
+              extraData={nowKey}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={busy
+                ? <ActivityIndicator color={color.accent} style={{ marginTop: space.xl }} />
+                : <Empty text={searching ? 'NO RESULTS' : 'NOTHING HERE'} />}
+            />
+            {scrubIndex && <ScrubBar letters={scrubIndex.letters} onScrub={scrubTo} />}
+          </View>
         )}
       </SafeAreaView>
+    </View>
+  );
+}
+
+// Case-insensitive alphabetical sort by a field, non-mutating.
+function sortByField(list, field) {
+  return Array.isArray(list)
+    ? [...list].sort((a, b) => (a?.[field] || '').localeCompare(b?.[field] || '', undefined, { sensitivity: 'base' }))
+    : [];
+}
+
+// Vertical A–Z index down the right edge. Touch-tracks the finger (no per-frame network —
+// only fires scrollTo when the letter under the finger changes).
+function ScrubBar({ letters, onScrub }) {
+  const heightRef = useRef(0);
+  const lastRef = useRef(null);
+  const pick = useCallback((locationY) => {
+    const h = heightRef.current;
+    if (h <= 0) return;
+    const rel = Math.min(0.999, Math.max(0, locationY / h));
+    const L = letters[Math.floor(rel * letters.length)];
+    if (L && L !== lastRef.current) { lastRef.current = L; onScrub(L); }
+  }, [letters, onScrub]);
+  return (
+    <View
+      style={styles.scrubBar}
+      onLayout={(e) => { heightRef.current = e.nativeEvent.layout.height; }}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderGrant={(e) => pick(e.nativeEvent.locationY)}
+      onResponderMove={(e) => pick(e.nativeEvent.locationY)}
+      onResponderRelease={() => { lastRef.current = null; }}
+      onResponderTerminate={() => { lastRef.current = null; }}
+    >
+      {letters.map((L) => (
+        <Text key={L} style={styles.scrubLetter} allowFontScaling={false}>{L}</Text>
+      ))}
     </View>
   );
 }
@@ -185,9 +267,9 @@ function SegBtn({ label, on, disabled, onPress }) {
   );
 }
 
-function Row({ primary, secondary, onPress, active }) {
+const Row = memo(function Row({ primary, secondary, onPress, arg, active }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+    <Pressable onPress={() => onPress(arg)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <View style={styles.flex}>
         <Text style={styles.rowPrimary} numberOfLines={1}>{primary}</Text>
         <Text style={styles.rowSecondary} numberOfLines={1}>{secondary}</Text>
@@ -195,7 +277,7 @@ function Row({ primary, secondary, onPress, active }) {
       <Text style={[styles.rowPlay, active && styles.rowPlayOn]}>▶</Text>
     </Pressable>
   );
-}
+});
 
 function Empty({ text }) { return <Text style={styles.empty}>{text}</Text>; }
 
@@ -251,7 +333,11 @@ const styles = StyleSheet.create({
   segText: { fontFamily: font.mono, fontSize: 11, letterSpacing: 2, color: color.textMid },
   segTextOn: { color: color.accentInk, fontWeight: '700' },
 
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md, paddingHorizontal: space.md, borderBottomWidth: border.hair, borderBottomColor: color.line, backgroundColor: color.panel, gap: space.md },
+  listWrap: { flex: 1, flexDirection: 'row' },
+  scrubBar: { width: 22, alignItems: 'center', justifyContent: 'center', paddingVertical: space.xs },
+  scrubLetter: { fontFamily: font.mono, fontSize: 9, lineHeight: 13, letterSpacing: 0.5, color: color.accent, fontWeight: '700' },
+
+  row: { height: ROW_HEIGHT, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.md, borderBottomWidth: border.hair, borderBottomColor: color.line, backgroundColor: color.panel, gap: space.md },
   rowPressed: { backgroundColor: color.panelAlt },
   rowPrimary: { fontFamily: font.display, fontSize: 15, fontWeight: '700', color: color.textHi },
   rowSecondary: { fontFamily: font.mono, fontSize: 11, letterSpacing: 1, color: color.textMid, marginTop: 2 },
