@@ -276,10 +276,12 @@ These need a native build or a firmware flash, so batch them with other native w
   serializers). **Firmware rebuild + flash.**
 - **Effort:** M · **Research:** JSON size vs `StaticJsonDocument` capacity on the ESP32-S3. · **OTA:** ❌
 
-### 5.3 ~~Firmware link-mode~~ — DROPPED (superseded by Phase A.1)
-Segments are removed entirely, so there's nothing to link. Instead, the paired firmware task is
-**revert `applyLedBrightness` to a single whole-strip fill and delete the `/api/segments/*`
-endpoints + vent state** (next flash), matching the hardware that drives all LEDs identically.
+### 5.3 Firmware single-zone LED revert + segment/lock removal · ✅ DONE (committed, pending flash)
+Firmware (`console-esp32.ino`, branch `relay`, commit `7c346d1`) now matches the app:
+`applyLedBrightness()` is a single whole-strip fill; the vent/segment state, all `/api/segments/*`
+routes + handlers, and the entire lock code (`/api/lock`, `handleLock`, `requireCodeIfLocked` + its
+14 gate call sites, `dev.locked/lockCode`, the `"locked"` JSON fields) are deleted. Braces balanced,
+no dangling refs; **not compiled in-env (no arduino-cli) — compile + flash to apply.**
 
 ### 5.4 ~~Optional: drop `react-native-audio-api`~~ — KEEP (mic visualizer is planned)
 - **Decision:** keep `react-native-audio-api` baked in — the mic visualizer is still on the roadmap,
@@ -341,8 +343,10 @@ phases — no feature is allowed to reintroduce the drag Phase 0–2 removed.
 3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free). ✅ 1.4 + 1.5 SHIPPED; 1.1 deferred.
 4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation). ✅ SHIPPED
 5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix). ✅ SHIPPED
-6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 +
-   single-zone LED revert (5.3), and optionally delete `/api/lock`.
+6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Firmware:** 5.3 (single-zone
+   LED + segment/lock removal) is ✅ committed on `relay` (`7c346d1`) — **just needs a compile +
+   flash**. 5.2 (consolidated `GET /api/state`) is still TODO, noted in the `.ino` header; pair it
+   with the app's poll coordinator (Phase 1.2) when built.
 
 **Shipped alongside Phase A:** Phase 6.1 (color-wheel dropdown) + 6.2 (Library alphabet scrubber),
 both built to the render/network rules above. 6.3 (firmware TODO) is queued for the next flash.
