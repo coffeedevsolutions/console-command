@@ -7,11 +7,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { dsp } from '../api/dspClient';
 import { useConnection } from '../hooks/useConnection';
-import { useGrundig1Store } from './grundig1/state/grundig1Store';
-import { useLidLight } from '../hooks/useLidLight';
 import { useNowPlaying } from '../hooks/useNowPlaying';
 import LidLightCard from '../components/LidLightCard';
-import LedSegmentCard from '../components/LedSegmentCard';
 import DottedGrid from '../components/ui/DottedGrid';
 import Panel, { Tick } from '../components/ui/Panel';
 import AppIntro from '../components/ui/AppIntro';
@@ -32,8 +29,6 @@ const SOURCES = [
 
 export default function Status({ navigation }) {
   const conn = useConnection();
-  const { state: grundigState, dispatch, actions } = useGrundig1Store();
-  const lockCode = grundigState?.global?.lockCode || '';
 
   const [urlDraft, setUrlDraft] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -47,7 +42,6 @@ export default function Status({ navigation }) {
   const [reveal, setReveal] = useState(false);
   const heroImgRef = useRef(null);
 
-  const lidLightState = useLidLight({ code: lockCode, pollingInterval: 3000 });
   const np = useNowPlaying({ pollMs: 1000, loadArtwork: false });
 
   useEffect(() => { setUrlDraft(conn.baseUrl); }, [conn.baseUrl]);
@@ -66,7 +60,7 @@ export default function Status({ navigation }) {
       // NOTE: do NOT dispatch SET_SOURCE to the Grundig store here — its
       // enhancedDispatch queues the action with stale state and would re-POST the
       // *previous* source a moment later, flipping the device back.
-      await dsp.setSource(next, lockCode);
+      await dsp.setSource(next);
       await conn.reconnectNow();
     } catch (e) {
       setOptimisticSource(null);
@@ -232,34 +226,14 @@ export default function Status({ navigation }) {
             </Panel>
           </Reveal>
 
-          {/* LOCK */}
-          <Reveal index={3}>
-            <Panel label="Lock Code" code="6-DIGIT" contentStyle={styles.stack}>
-              <TextInput
-                value={lockCode}
-                onChangeText={(code) => dispatch({ type: actions.SET_LOCK_CODE, code })}
-                keyboardType="numeric"
-                maxLength={6}
-                secureTextEntry
-                placeholder="— — — — — —"
-                placeholderTextColor={color.textLow}
-                style={[styles.input, styles.inputMono]}
-              />
-              <Text style={styles.hint}>Only required while the console is locked.</Text>
-            </Panel>
-          </Reveal>
-
           {/* LIGHTING */}
-          <Reveal index={4}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
-          <Reveal index={5}>
-            <LidLightCard passwordLocked={conn.locked} lockCode={lockCode} />
-          </Reveal>
-          <Reveal index={6}>
-            <LedSegmentCard passwordLocked={conn.locked} lockCode={lockCode} lidLightState={lidLightState} />
+          <Reveal index={3}><Text style={styles.groupLabel}>◦ LIGHTING</Text></Reveal>
+          <Reveal index={4}>
+            <LidLightCard />
           </Reveal>
 
           {/* NAV */}
-          <Reveal index={7}>
+          <Reveal index={5}>
             <View style={styles.row}>
               <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
                 <Text style={styles.navText}>CONTROLS</Text>

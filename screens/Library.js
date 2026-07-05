@@ -9,15 +9,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { dsp } from '../api/dspClient';
-import { useGrundig1Store } from './grundig1/state/grundig1Store';
 import AppleMusic, { capabilities } from '../modules/apple-music';
 import DottedGrid from '../components/ui/DottedGrid';
 import { color, border, space, type, font } from '../theme/tokens';
 
 export default function Library({ navigation, route }) {
-  const { state } = useGrundig1Store();
-  const lockCode = state?.global?.lockCode || '';
-
   const available = AppleMusic.isAvailable;
   const [auth, setAuth] = useState(available ? AppleMusic.getAuthorizationStatus() : 'unavailable');
   const requestAuth = useCallback(async () => setAuth(await AppleMusic.requestAuthorization()), []);
@@ -68,9 +64,9 @@ export default function Library({ navigation, route }) {
   const ensureBluetooth = useCallback(async () => {
     try {
       const s = await dsp.status();
-      if (s?.source && s.source !== 'bluetooth') await dsp.setSource('bluetooth', lockCode);
+      if (s?.source && s.source !== 'bluetooth') await dsp.setSource('bluetooth');
     } catch { /* console unreachable — start playback on the iPad anyway */ }
-  }, [lockCode]);
+  }, []);
 
   const playSong = useCallback(async (item) => {
     if (item.persistentID) {

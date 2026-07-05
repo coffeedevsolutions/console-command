@@ -1,53 +1,36 @@
 // components/LidLightCard.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Switch, TouchableOpacity, TextInput, StyleSheet, PanResponder } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, StyleSheet, PanResponder } from 'react-native';
 import { useLidLight } from '../hooks/useLidLight';
+import ColorPicker from './ColorPicker';
 import { theme } from '../theme/tokens';
 
 const T = theme; // tokens (imported as `theme` to avoid clashing with the hook's `color`)
 
 /**
- * Lid Light control card component
- * Displays current lid light status and provides controls for power, presets, and custom RGB
- * 
- * @param {Object} props
- * @param {boolean} props.passwordLocked - Whether device is locked
- * @param {string} props.lockCode - 6-digit unlock code (if available)
+ * Lid Light control card — the single lighting controller: power, brightness,
+ * presets, and a color wheel. Drives the whole LED strip.
  */
-export default function LidLightCard({ passwordLocked, lockCode }) {
+export default function LidLightCard() {
   const {
     lidOpen,
     brightness,
     color,
     loading,
-    error,
     pendingAction,
     isOn,
     setPower,
     setBrightness,
     setPreset,
     setRgb,
-  } = useLidLight({ code: lockCode, pollingInterval: 1000 });
+  } = useLidLight({ pollingInterval: 3000 });
 
-  // Local state for RGB inputs and brightness slider
-  const [rInput, setRInput] = useState('0');
-  const [gInput, setGInput] = useState('0');
-  const [bInput, setBInput] = useState('0');
   const [sliderBrightness, setSliderBrightness] = useState(0);
   const sliderLayoutRef = useRef({ x: 0, y: 0, width: 300, height: 40 });
   const isDragging = useRef(false);
   const pendingBrightnessRef = useRef(null);
   const brightnessTimerRef = useRef(null);
   const hasPendingBrightnessChange = useRef(false);
-
-  // Update RGB inputs when color changes
-  useEffect(() => {
-    if (color) {
-      setRInput(String(color.r || 0));
-      setGInput(String(color.g || 0));
-      setBInput(String(color.b || 0));
-    }
-  }, [color]);
 
   // Update slider brightness when brightness changes (only if not dragging or pending change)
   useEffect(() => {
@@ -65,9 +48,7 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
     };
   }, []);
 
-  // Determine if controls should be disabled
-  const isLocked = passwordLocked && !lockCode;
-  const controlsDisabled = loading || pendingAction || isLocked;
+  const controlsDisabled = loading || pendingAction;
 
   // Handle power toggle
   const handlePowerToggle = (value) => {
@@ -77,24 +58,13 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
   // Handle brightness change (debounced)
   const handleBrightnessChange = (value) => {
     const clampedValue = Math.max(0, Math.min(100, Math.round(value)));
-    console.log('[LidLightCard] handleBrightnessChange called with:', clampedValue);
-    // Send to API - always trust the slider value
     setBrightness(clampedValue);
-    // Clear the pending flag after sending
     hasPendingBrightnessChange.current = false;
   };
 
   // Handle preset selection
   const handlePresetPress = (preset) => {
     setPreset(preset);
-  };
-
-  // Handle custom RGB apply
-  const handleApplyRgb = () => {
-    const r = parseInt(rInput, 10) || 0;
-    const g = parseInt(gInput, 10) || 0;
-    const b = parseInt(bInput, 10) || 0;
-    setRgb(r, g, b);
   };
 
   // Calculate brightness from touch position
@@ -296,63 +266,15 @@ export default function LidLightCard({ passwordLocked, lockCode }) {
         </View>
       </View>
 
-      {/* Custom RGB */}
+      {/* Custom color */}
       <View style={styles.controlSection}>
-        <Text style={styles.controlLabel}>Custom RGB:</Text>
-        <View style={styles.rgbInputRow}>
-          <View style={styles.rgbInputGroup}>
-            <Text style={styles.rgbLabel}>R:</Text>
-            <TextInput
-              style={styles.rgbInput}
-              value={rInput}
-              onChangeText={setRInput}
-              keyboardType="numeric"
-              maxLength={3}
-              editable={!controlsDisabled}
-            />
-          </View>
-          <View style={styles.rgbInputGroup}>
-            <Text style={styles.rgbLabel}>G:</Text>
-            <TextInput
-              style={styles.rgbInput}
-              value={gInput}
-              onChangeText={setGInput}
-              keyboardType="numeric"
-              maxLength={3}
-              editable={!controlsDisabled}
-            />
-          </View>
-          <View style={styles.rgbInputGroup}>
-            <Text style={styles.rgbLabel}>B:</Text>
-            <TextInput
-              style={styles.rgbInput}
-              value={bInput}
-              onChangeText={setBInput}
-              keyboardType="numeric"
-              maxLength={3}
-              editable={!controlsDisabled}
-            />
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.applyButton,
-              controlsDisabled && styles.applyButtonDisabled,
-            ]}
-            onPress={handleApplyRgb}
-            disabled={controlsDisabled}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.applyButtonText}>Apply</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.controlLabel}>Custom Color:</Text>
+        <ColorPicker
+          color={color}
+          onChange={(c) => setRgb(c.r, c.g, c.b)}
+          disabled={controlsDisabled}
+        />
       </View>
-
-      {/* Locked Message */}
-      {isLocked && (
-        <Text style={styles.lockedText}>
-          Device is locked. Enter code to control lights.
-        </Text>
-      )}
 
       {/* Pending Action Indicator */}
       {pendingAction && (

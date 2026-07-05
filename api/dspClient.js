@@ -46,11 +46,6 @@ function toWs(url) {
   return url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
 }
 
-// Helper to append code query param for locked device
-function withCode(path, code) {
-  return code ? `${path}?code=${encodeURIComponent(code)}` : path;
-}
-
 export const dsp = {
   // config
   setBaseUrl,
@@ -124,12 +119,9 @@ export const dsp = {
     return request('/api/lock', { method: 'POST', body: options });
   },
 
-  // Input Source Selection
-  async setSource(source, code) {
-    // source: 'turntable' | 'bluetooth'
-    // code: optional 6-digit PIN if lock is enabled
-    const qs = code ? `?code=${encodeURIComponent(code)}` : '';
-    return request(`/api/source${qs}`, { method: 'POST', body: { source } });
+  // Input Source Selection ('turntable' | 'bluetooth')
+  async setSource(source) {
+    return request('/api/source', { method: 'POST', body: { source } });
   },
 
   // Preset management
@@ -145,100 +137,22 @@ export const dsp = {
     return request('/api/preset/copy', { method: 'POST', body: { from, to } });
   },
 
-  // === Lid Light API ===
+  // === Lid Light API === (single controller; drives the whole strip)
 
-  // Get lid light status
-  async getLidLightStatus(code) {
-    return request(withCode('/api/lidlight/status', code), { timeout: 5000 });
+  async getLidLightStatus() {
+    return request('/api/lidlight/status', { timeout: 5000 });
   },
-
-  // Set lid light power on/off
-  async setLidLightPower(on, code) {
-    return request(withCode('/api/lidlight/power', code), { method: 'POST', body: { on } });
+  async setLidLightPower(on) {
+    return request('/api/lidlight/power', { method: 'POST', body: { on } });
   },
-
-  // Set lid light color using RGB values (0-255)
-  async setLidLightColorRgb(r, g, b, code) {
-    return request(withCode('/api/lidlight/color', code), { method: 'POST', body: { r, g, b } });
+  async setLidLightColorRgb(r, g, b) {
+    return request('/api/lidlight/color', { method: 'POST', body: { r, g, b } });
   },
-
-  // Set lid light color using preset name
-  async setLidLightColorPreset(preset, code) {
-    return request(withCode('/api/lidlight/color', code), { method: 'POST', body: { preset } });
+  async setLidLightColorPreset(preset) {
+    return request('/api/lidlight/color', { method: 'POST', body: { preset } });
   },
-
-  // Set lid light brightness (0-100%)
-  async setLidLightBrightness(brightness, code) {
-    const url = withCode('/api/lidlight/brightness', code);
-    const body = { brightness };
-    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
-    return request(url, { method: 'POST', body });
-  },
-
-  // === LED Segment API ===
-
-  // Get segment status
-  async getSegmentStatus(code) {
-    const url = withCode('/api/segments/status', code);
-    console.log('[dspClient] GET', url);
-    const result = await request(url, { timeout: 5000 });
-    console.log('[dspClient] GET /api/segments/status response:', JSON.stringify(result));
-    return result;
-  },
-
-  // Set segment color (segment: 1 or 2)
-  async setSegmentColor(segment, r, g, b, code) {
-    const url = withCode('/api/segments/color', code);
-    const body = { segment, r, g, b };
-    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
-    const result = await request(url, { 
-      method: 'POST', 
-      body 
-    });
-    console.log('[dspClient] POST /api/segments/color response:', JSON.stringify(result));
-    return result;
-  },
-
-  // Set segment brightness (segment: 1 or 2, brightness: 0-100)
-  async setSegmentBrightness(segment, brightness, code) {
-    const url = withCode('/api/segments/brightness', code);
-    const body = { segment, brightness };
-    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
-    const result = await request(url, { 
-      method: 'POST', 
-      body 
-    });
-    console.log('[dspClient] POST /api/segments/brightness response:', JSON.stringify(result));
-    return result;
-  },
-
-  // Set link mode (linked: boolean, copySettings: optional boolean)
-  async setSegmentLinkMode(linked, copySettings, code) {
-    const url = withCode('/api/segments/link', code);
-    const body = { linked };
-    if (copySettings !== undefined) {
-      body.copySettings = copySettings;
-    }
-    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
-    const result = await request(url, { 
-      method: 'POST', 
-      body 
-    });
-    console.log('[dspClient] POST /api/segments/link response:', JSON.stringify(result));
-    return result;
-  },
-
-  // Enable/disable segment (segment: 1 or 2, enabled: boolean)
-  async setSegmentEnabled(segment, enabled, code) {
-    const url = withCode('/api/segments/config', code);
-    const body = { segment, enabled };
-    console.log('[dspClient] POST', url, 'with body:', JSON.stringify(body));
-    const result = await request(url, { 
-      method: 'POST', 
-      body 
-    });
-    console.log('[dspClient] POST /api/segments/config response:', JSON.stringify(result));
-    return result;
+  async setLidLightBrightness(brightness) {
+    return request('/api/lidlight/brightness', { method: 'POST', body: { brightness } });
   },
 
   // optional realtime updates if your firmware exposes ws://<ip>/ws
