@@ -80,7 +80,6 @@ export default function LidLightCard() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => {
-        console.log('[PanResponder] onStartShouldSetPanResponder - controlsDisabled:', controlsDisabled, 'width:', sliderLayoutRef.current.width);
         return !controlsDisabled && sliderLayoutRef.current.width > 0;
       },
       onStartShouldSetPanResponderCapture: () => {
@@ -96,11 +95,9 @@ export default function LidLightCard() {
       },
       onPanResponderTerminationRequest: () => {
         // Don't allow other components to terminate our gesture
-        console.log('[PanResponder] Termination requested - DENIED');
         return false;
       },
       onPanResponderGrant: (evt) => {
-        console.log('[PanResponder] onPanResponderGrant - touch started');
         // Cancel any pending API call if user starts dragging again
         if (brightnessTimerRef.current) {
           clearTimeout(brightnessTimerRef.current);
@@ -110,7 +107,6 @@ export default function LidLightCard() {
         
         isDragging.current = true;
         const newValue = calculateBrightnessFromTouch(evt.nativeEvent.pageX);
-        console.log('[PanResponder] Calculated brightness:', newValue);
         setSliderBrightness(newValue);
         pendingBrightnessRef.current = newValue;
       },
@@ -120,7 +116,6 @@ export default function LidLightCard() {
         pendingBrightnessRef.current = newValue;
       },
       onPanResponderRelease: () => {
-        console.log('[PanResponder] onPanResponderRelease - touch released, pendingBrightness:', pendingBrightnessRef.current);
         isDragging.current = false;
         
         // Clear any existing timer
@@ -131,20 +126,15 @@ export default function LidLightCard() {
         // Set new timer - only send after 1.5 seconds of no movement
         if (pendingBrightnessRef.current !== null) {
           const valueToSend = pendingBrightnessRef.current;
-          console.log('[LidLightCard] Slider released, starting 1.5s timer for value:', valueToSend);
           hasPendingBrightnessChange.current = true; // Prevent polling from overwriting
           brightnessTimerRef.current = setTimeout(() => {
-            console.log('[LidLightCard] Timer fired, calling handleBrightnessChange');
             handleBrightnessChange(valueToSend);
             brightnessTimerRef.current = null;
           }, 1500);
           pendingBrightnessRef.current = null;
-        } else {
-          console.log('[PanResponder] No pending brightness value to send');
         }
       },
       onPanResponderTerminate: () => {
-        console.log('[PanResponder] onPanResponderTerminate - gesture cancelled');
         isDragging.current = false;
         pendingBrightnessRef.current = null;
         hasPendingBrightnessChange.current = false;

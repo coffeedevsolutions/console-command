@@ -1,12 +1,15 @@
 // components/ui/DottedGrid.js
 // Full-bleed "blueprint" field — a muted dotted grid that sits fixed behind the page.
 // Drawn once with an SVG pattern (cheap, scales to any screen). Non-interactive.
+import { memo } from 'react';
 import { StyleSheet } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import Svg, { Defs, Pattern, Circle, Rect, Line, G } from 'react-native-svg';
 import { color } from '../../theme/tokens';
 
-export default function DottedGrid({ gap = 24, dot = 1.1, crosshair = true }) {
+// Memoized: props are static and it only depends on window size (rotation), so it must not
+// re-render/re-upload its SVG pattern on every poll setState in the parent screens.
+function DottedGrid({ gap = 24, dot = 1.1, crosshair = true }) {
   const { width, height } = useWindowDimensions();
   return (
     <Svg
@@ -31,3 +34,5 @@ export default function DottedGrid({ gap = 24, dot = 1.1, crosshair = true }) {
     </Svg>
   );
 }
+
+export default memo(DottedGrid);

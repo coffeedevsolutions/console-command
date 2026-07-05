@@ -61,9 +61,15 @@ removes ~1000+ LOC, a whole 3s poll, and **nullifies the only hardware-visible c
 
 ---
 
-## Phase 0 — Render & log hygiene · *zero hardware risk* (OTA)
+## Phase 0 — Render & log hygiene · *zero hardware risk* (OTA) · ✅ SHIPPED
 Pure CPU/GC wins. Nothing here touches a network call or a hardware command, so the console
 behaves identically.
+
+**Status:** shipped. 0.1 — `DottedGrid` and `TransportIcons` are `React.memo`'d (`Panel` skipped:
+it wraps `children`, so its props change every render and memo wouldn't fire; the `Status` nav is a
+handful of inline `Pressable`s, negligible cost — not worth extracting). 0.2 — all debug logs
+deleted; the 4 remaining error/warn paths are `if (__DEV__)`-guarded (compile out of production).
+0.3 — already folded into Phase A (the duplicate poll was removed with the segment card).
 
 ### 0.1 Memoize static components
 - **Impact:** `Status` re-renders every 1–4s (poll `setState`s) and `NowPlaying` ~2×/s; each
@@ -294,7 +300,7 @@ phases — no feature is allowed to reintroduce the drag Phase 0–2 removed.
 ## Suggested rollout
 1. **OTA #1:** **Phase A** (remove segments + lock code) — biggest readability/perf win, deletes a
    poll, and clears the plan's only hardware caveat. Do this first.
-2. **OTA #2:** Phase 0 (0.1–0.3) — tiny, zero-risk render/log hygiene (0.3 folds into A.1).
+2. **OTA #2:** Phase 0 (0.1–0.3) — tiny, zero-risk render/log hygiene (0.3 folds into A.1). ✅ SHIPPED
 3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free).
 4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation).
 5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix).

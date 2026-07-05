@@ -311,7 +311,7 @@ export async function syncFromArduino() {
     const arduinoState = await dsp.getState();
     return arduinoToGrundig1State(arduinoState);
   } catch (error) {
-    console.warn('Failed to sync from Arduino:', error);
+    if (__DEV__) console.warn('Failed to sync from Arduino:', error);
     return null;
   }
 }

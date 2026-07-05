@@ -84,9 +84,8 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
               const finalResult = await dsp.getLidLightStatus(code);
               setCachedBrightness(finalResult.brightness || 0);
               setCachedColor(finalResult.color || { r: 0, g: 0, b: 0 });
-            } catch (err) {
+            } catch {
               // Ignore errors on the follow-up fetch
-              console.warn('Failed to fetch final brightness:', err);
             }
           }, 800); // Wait 800ms (server's 300ms fade + network latency + processing buffer)
         }
@@ -108,21 +107,17 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
    * @param {boolean} on - True to turn on, false to turn off
    */
   const setPower = useCallback(async (on) => {
-    console.log('[useLidLight] setPower called with:', on);
     setPendingAction(true);
     setError(null);
     try {
       if (on) {
         // When turning on, restore to last non-zero brightness or default to 75%
         const restoreBrightness = lastNonZeroBrightness.current || 75;
-        console.log('[useLidLight] Turning ON, setting brightness to:', restoreBrightness);
-        
         // Set brightness first (this turns it on)
         await dsp.setLidLightBrightness(restoreBrightness, code);
         setCachedBrightness(restoreBrightness);
       } else {
         // When turning off, set brightness to 0
-        console.log('[useLidLight] Turning OFF, setting brightness to 0');
         await dsp.setLidLightBrightness(0, code);
         setCachedBrightness(0);
       }
@@ -133,7 +128,7 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
       // Force full refresh to get final state after fade
       await refresh(true);
     } catch (err) {
-      console.error('[useLidLight] Error setting power:', err);
+      if (__DEV__) console.error('[useLidLight] Error setting power:', err);
       setError(err.message || 'Failed to set power');
     } finally {
       setPendingAction(false);
@@ -145,24 +140,21 @@ export function useLidLight({ code, pollingInterval = 3000 } = {}) {
    * @param {number} brightness - Brightness level (0-100)
    */
   const setBrightness = useCallback(async (brightness) => {
-    console.log('[useLidLight] setBrightness called with:', brightness);
     setPendingAction(true);
     setError(null);
     try {
       // Optimistically update cached brightness
       setCachedBrightness(brightness);
-      
-      console.log('[useLidLight] Calling API setLidLightBrightness...');
-      const result = await dsp.setLidLightBrightness(brightness, code);
-      console.log('[useLidLight] API response:', result);
-      
+
+      await dsp.setLidLightBrightness(brightness, code);
+
       // Wait for server's fade to complete then refresh to get final value
       await new Promise(resolve => setTimeout(resolve, 800));
       
       // Fetch final value after fade
       await refresh(true);
     } catch (err) {
-      console.error('[useLidLight] Error setting brightness:', err);
+      if (__DEV__) console.error('[useLidLight] Error setting brightness:', err);
       setError(err.message || 'Failed to set brightness');
       // Revert on error - force refresh to get actual value
       await refresh(true);
