@@ -281,10 +281,9 @@ Segments are removed entirely, so there's nothing to link. Instead, the paired f
 **revert `applyLedBrightness` to a single whole-strip fill and delete the `/api/segments/*`
 endpoints + vent state** (next flash), matching the hardware that drives all LEDs identically.
 
-### 5.4 Optional: drop `react-native-audio-api`
-- **Impact:** FFmpeg-backed, currently baked but **unused**; adds binary size + a little startup.
-  Keep if the mic-visualizer is still planned; otherwise drop at a rebuild to reclaim size.
-- **Effort:** XS · **OTA:** ❌ (native).
+### 5.4 ~~Optional: drop `react-native-audio-api`~~ — KEEP (mic visualizer is planned)
+- **Decision:** keep `react-native-audio-api` baked in — the mic visualizer is still on the roadmap,
+  so its size/startup cost is intended, not dead weight. Do **not** remove it at the rebuild.
 
 ---
 
