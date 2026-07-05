@@ -177,9 +177,18 @@ throughout, so nothing goes stale — this also kills the double-poll while Now 
 
 ---
 
-## Phase 2 — Now Playing consolidation (OTA)
+## Phase 2 — Now Playing consolidation (OTA) · ✅ SHIPPED
+New `hooks/nowPlaying.js` provider wraps the app (`App.js`); `hooks/useNowPlaying.js` deleted. Both
+consumers migrated. **Verify on device:** open Now Playing — artwork/title steady, progress bar +
+time + play/pause/shuffle/repeat all live; return to Status — mini-bar title/artist correct and its
+timestamp ticks again; transport controls + playlist play still work.
 
-### 2.1 `NowPlayingProvider`
+### 2.1 `NowPlayingProvider` · ✅ SHIPPED
+Single provider = one auth read, one event subscription, one **adaptive** position timer
+(`requestPositionPoll(ms)` — consumers register a cadence while focused; the timer runs at the
+fastest request, or off when none). Mini-bar requests 1s only while Status is focused; the NowPlaying
+screen requests 500ms while mounted. State is split into a **stable** context (track/artwork/controls/
+auth) and a **position** context (pb) so ticks don't re-render the stable slice.
 - **Impact:** today two `useNowPlaying` instances run when NowPlaying is open (double auth reads,
   double event subscriptions, two timers). A single shared provider = one auth read, one event
   subscription, one **adaptive** position timer: **off** for the mini-bar (events-only), **500ms only
@@ -191,7 +200,10 @@ throughout, so nothing goes stale — this also kills the double-poll while Now 
   `Library.js`. Mirror the Grundig store context shape.
 - **Effort:** M · **Research:** wrap-point in `App.js`; confirm event unsubscribe on unmount. · **OTA:** ✅
 
-### 2.2 Isolate the progress bar
+### 2.2 Isolate the progress bar · ✅ SHIPPED
+Done via the position context: a `<Playback>` leaf (NowPlaying) and a `<MiniBarTime>` leaf (Status)
+are the only subtrees that read position, so the 500ms tick re-renders just those — the artwork
+`Image`, `DottedGrid`, metadata, and animated reflow stay put.
 - **Impact:** the 500ms position tick `setState`s at the `NowPlaying` root, re-rendering the artwork
   `Image` + `DottedGrid` + transport just to move the fill. Extract a memoized `<ProgressBar>` that
   owns the ticking `pb` (needs `currentTime` + `track.duration`), leaving the rest static.
@@ -316,7 +328,7 @@ phases — no feature is allowed to reintroduce the drag Phase 0–2 removed.
    poll, and clears the plan's only hardware caveat. Do this first.
 2. **OTA #2:** Phase 0 (0.1–0.3) — tiny, zero-risk render/log hygiene (0.3 folds into A.1). ✅ SHIPPED
 3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free). ✅ 1.4 + 1.5 SHIPPED; 1.1 deferred.
-4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation).
+4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation). ✅ SHIPPED
 5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix).
 6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 +
    single-zone LED revert (5.3), and optionally delete `/api/lock`.

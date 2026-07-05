@@ -13,7 +13,7 @@ import Animated, {
 import DottedGrid from '../components/ui/DottedGrid';
 import { Tick } from '../components/ui/Panel';
 import { PlayIcon, PauseIcon, PrevIcon, NextIcon } from '../components/ui/TransportIcons';
-import { useNowPlaying } from '../hooks/useNowPlaying';
+import { useNowPlayingStable, useNowPlayingPosition } from '../hooks/nowPlaying';
 import { color, border, space, type, font } from '../theme/tokens';
 
 const CHROME_HOLD_MS = 5000;
@@ -25,7 +25,9 @@ function fmt(sec) {
 }
 
 export default function NowPlaying({ navigation }) {
-  const { available, auth, track, artwork, pb, controls, requestAuth } = useNowPlaying();
+  const { available, auth, track, artwork, controls, requestAuth, requestPositionPoll } = useNowPlayingStable();
+  // While this screen is open, drive the shared position timer at 500ms (smooth progress bar).
+  useEffect(() => requestPositionPoll(500), [requestPositionPoll]);
   const { width: W, height: H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const landscape = W > H;
@@ -34,7 +36,6 @@ export default function NowPlaying({ navigation }) {
     ? Math.min(H - insets.top - insets.bottom - 72, 460)
     : Math.min(W - space.xl * 2, 460);
 
-  const [trackW, setTrackW] = useState(0);
   const [chromeInteractive, setChromeInteractive] = useState(false);
   const [playlistsOpen, setPlaylistsOpen] = useState(false);
   const [playlists, setPlaylists] = useState([]);
@@ -83,14 +84,8 @@ export default function NowPlaying({ navigation }) {
 
   const chromeStyle = useAnimatedStyle(() => ({ opacity: chrome.value }));
 
-  const playing = pb?.state === 'playing';
-  const cur = pb?.currentTime || 0;
-  const dur = track?.duration || 0;
-  const prog = dur > 0 ? Math.min(1, cur / dur) : 0;
-  const shuffleOn = pb?.shuffleMode && pb.shuffleMode !== 'off';
-  const repeatOn = pb?.repeatMode && pb.repeatMode !== 'none';
-
-  const seekAt = (x) => { if (trackW > 0 && dur > 0) controls.seek((x / trackW) * dur); reveal(); };
+  // Position (progress + transport state) lives in <Playback>, a leaf that reads the position
+  // context — so the 500ms tick re-renders only that, not the artwork / metadata / reflow above.
   const withReveal = (fn) => () => { fn(); reveal(); };
 
   if (!available || auth === 'denied' || auth === 'restricted') {
@@ -146,40 +141,12 @@ export default function NowPlaying({ navigation }) {
                 <Text style={styles.album} numberOfLines={1}>{track?.albumTitle || ''}</Text>
               </View>
 
-              <View>
-                <Pressable
-                  onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
-                  onPress={(e) => seekAt(e.nativeEvent.locationX)}
-                  style={styles.track}
-                  hitSlop={12}
-                >
-                  <View style={[styles.fill, { width: `${prog * 100}%` }]} />
-                </Pressable>
-                <View style={styles.timeRow}>
-                  <Text style={styles.time}>{fmt(cur)}</Text>
-                  <Text style={styles.time}>{fmt(dur)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.transport}>
-                <Pressable onPress={withReveal(() => controls.setShuffle(shuffleOn ? 'off' : 'songs'))} style={styles.modeBtn}>
-                  <Text style={[styles.modeText, shuffleOn && styles.modeOn]}>SHUF</Text>
-                </Pressable>
-                <Pressable onPress={withReveal(controls.previous)} style={styles.skipBtn}>
-                  <PrevIcon size={20} color={color.textHi} />
-                </Pressable>
-                <Pressable onPress={withReveal(controls.toggle)} style={styles.playBtn}>
-                  {playing ? <PauseIcon size={22} color={color.accentInk} /> : <PlayIcon size={22} color={color.accentInk} />}
-                </Pressable>
-                <Pressable onPress={withReveal(controls.next)} style={styles.skipBtn}>
-                  <NextIcon size={20} color={color.textHi} />
-                </Pressable>
-                <Pressable onPress={withReveal(() => controls.setRepeat(repeatOn ? 'none' : 'all'))} style={styles.modeBtn}>
-                  <Text style={[styles.modeText, repeatOn && styles.modeOn]}>
-                    {pb?.repeatMode === 'one' ? 'RPT1' : 'RPT'}
-                  </Text>
-                </Pressable>
-              </View>
+              <Playback
+                duration={track?.duration || 0}
+                controls={controls}
+                reveal={reveal}
+                withReveal={withReveal}
+              />
             </Animated.View>
           </Animated.View>
         </SafeAreaView>
@@ -215,6 +182,59 @@ export default function NowPlaying({ navigation }) {
         )}
       </Animated.View>
     </View>
+  );
+}
+
+// Progress bar + time + transport. The ONLY subtree that reads the position context, so the 500ms
+// tick re-renders just this — the artwork, metadata and animated reflow above stay put.
+function Playback({ duration, controls, reveal, withReveal }) {
+  const pb = useNowPlayingPosition();
+  const [trackW, setTrackW] = useState(0);
+
+  const playing = pb?.state === 'playing';
+  const cur = pb?.currentTime || 0;
+  const prog = duration > 0 ? Math.min(1, cur / duration) : 0;
+  const shuffleOn = pb?.shuffleMode && pb.shuffleMode !== 'off';
+  const repeatOn = pb?.repeatMode && pb.repeatMode !== 'none';
+  const seekAt = (x) => { if (trackW > 0 && duration > 0) controls.seek((x / trackW) * duration); reveal(); };
+
+  return (
+    <>
+      <View>
+        <Pressable
+          onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
+          onPress={(e) => seekAt(e.nativeEvent.locationX)}
+          style={styles.track}
+          hitSlop={12}
+        >
+          <View style={[styles.fill, { width: `${prog * 100}%` }]} />
+        </Pressable>
+        <View style={styles.timeRow}>
+          <Text style={styles.time}>{fmt(cur)}</Text>
+          <Text style={styles.time}>{fmt(duration)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.transport}>
+        <Pressable onPress={withReveal(() => controls.setShuffle(shuffleOn ? 'off' : 'songs'))} style={styles.modeBtn}>
+          <Text style={[styles.modeText, shuffleOn && styles.modeOn]}>SHUF</Text>
+        </Pressable>
+        <Pressable onPress={withReveal(controls.previous)} style={styles.skipBtn}>
+          <PrevIcon size={20} color={color.textHi} />
+        </Pressable>
+        <Pressable onPress={withReveal(controls.toggle)} style={styles.playBtn}>
+          {playing ? <PauseIcon size={22} color={color.accentInk} /> : <PlayIcon size={22} color={color.accentInk} />}
+        </Pressable>
+        <Pressable onPress={withReveal(controls.next)} style={styles.skipBtn}>
+          <NextIcon size={20} color={color.textHi} />
+        </Pressable>
+        <Pressable onPress={withReveal(() => controls.setRepeat(repeatOn ? 'none' : 'all'))} style={styles.modeBtn}>
+          <Text style={[styles.modeText, repeatOn && styles.modeOn]}>
+            {pb?.repeatMode === 'one' ? 'RPT1' : 'RPT'}
+          </Text>
+        </Pressable>
+      </View>
+    </>
   );
 }
 

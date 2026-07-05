@@ -10,6 +10,7 @@ import NowPlayingScreen from './screens/NowPlaying';
 import LibraryScreen from './screens/Library';
 import Grundig1Screen from './screens/grundig1';
 import { Grundig1Provider } from './screens/grundig1/state/grundig1Store';
+import { NowPlayingProvider } from './hooks/nowPlaying';
 import { color } from './theme/tokens';
 
 const Stack = createNativeStackNavigator();
@@ -40,6 +41,7 @@ export default function App() {
 
   return (
     <Grundig1Provider>
+      <NowPlayingProvider>
       <StatusBar hidden style="light" />
       <NavigationContainer theme={navTheme}>
         <Stack.Navigator
@@ -68,6 +70,7 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
+      </NowPlayingProvider>
     </Grundig1Provider>
   );
 }

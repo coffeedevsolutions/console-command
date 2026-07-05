@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { dsp } from '../api/dspClient';
 import { useConnection } from '../hooks/useConnection';
-import { useNowPlaying } from '../hooks/useNowPlaying';
+import { useNowPlayingStable, useNowPlayingPosition } from '../hooks/nowPlaying';
 import LidLightCard from '../components/LidLightCard';
 import DottedGrid from '../components/ui/DottedGrid';
 import Panel, { Tick } from '../components/ui/Panel';
@@ -21,6 +21,13 @@ const CONSOLE_IMG = require('../assets/images/grundig-ks-680-wireframe-partial-o
 function fmt(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// Leaf that reads the shared position context, so the mini-bar's per-second timestamp re-renders
+// on its own without dragging the rest of the command center (DottedGrid, panels, nav) with it.
+function MiniBarTime() {
+  const pb = useNowPlayingPosition();
+  return <Text style={styles.npBarTime}>{fmt(pb?.currentTime)}</Text>;
 }
 
 const SOURCES = [
@@ -44,9 +51,14 @@ export default function Status({ navigation }) {
   const [reveal, setReveal] = useState(false);
   const heroImgRef = useRef(null);
 
-  // Mini-bar only needs track/state (arrive via change events) + a coarse timestamp. Pause its
-  // per-second position poll when NowPlaying/Library is over the top (that screen polls its own).
-  const np = useNowPlaying({ pollMs: 1000, loadArtwork: false, poll: isFocused });
+  // Mini-bar reads the shared Now-Playing provider: title/artist from the stable slice (change
+  // events keep it fresh). It requests a coarse 1s position poll only while Status is focused, so
+  // the timestamp ticks here but pauses when NowPlaying/Library is on top (that screen polls 500ms).
+  const { track: npTrack, requestPositionPoll } = useNowPlayingStable();
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    return requestPositionPoll(1000);
+  }, [isFocused, requestPositionPoll]);
 
   useEffect(() => { setUrlDraft(conn.baseUrl); }, [conn.baseUrl]);
   useEffect(() => {
@@ -138,12 +150,12 @@ export default function Status({ navigation }) {
           {/* NOW PLAYING — headered panel above input source, part of the cascade */}
           <Reveal index={0}>
             <Pressable onPress={() => navigation.navigate('NowPlaying')}>
-              <Panel label="Now Playing" code={np.track ? 'APPLE MUSIC' : 'TAP TO OPEN'} ticks contentStyle={styles.npRow}>
+              <Panel label="Now Playing" code={npTrack ? 'APPLE MUSIC' : 'TAP TO OPEN'} ticks contentStyle={styles.npRow}>
                 <View style={styles.npBarLeft}>
-                  <Text style={styles.npBarTitle} numberOfLines={1}>{np.track?.title || 'Nothing playing'}</Text>
-                  <Text style={styles.npBarArtist} numberOfLines={1}>{np.track?.artist || 'Apple Music'}</Text>
+                  <Text style={styles.npBarTitle} numberOfLines={1}>{npTrack?.title || 'Nothing playing'}</Text>
+                  <Text style={styles.npBarArtist} numberOfLines={1}>{npTrack?.artist || 'Apple Music'}</Text>
                 </View>
-                {np.track ? <Text style={styles.npBarTime}>{fmt(np.pb?.currentTime)}</Text> : null}
+                {npTrack ? <MiniBarTime /> : null}
               </Panel>
             </Pressable>
           </Reveal>
