@@ -47,10 +47,18 @@ export interface LibrarySong {
   playbackStoreID: string; // Apple Music catalog id if it's a store item, else ''
   title: string; artist: string; albumTitle: string; duration: number; hasArtwork: boolean;
 }
-// Apple Music catalog song — MusicKit.
+// Apple Music catalog items — MusicKit.
 export interface CatalogSong {
   id: string; title: string; artist: string; albumTitle: string; duration: number; artworkURL: string;
 }
+export interface CatalogPlaylist { id: string; name: string; curator: string; artworkURL: string; }
+export interface CatalogAlbum { id: string; title: string; artist: string; artworkURL: string; }
+export interface CatalogArtist { id: string; name: string; }
+export interface CatalogSearchResults {
+  songs: CatalogSong[]; albums: CatalogAlbum[]; playlists: CatalogPlaylist[]; artists: CatalogArtist[];
+}
+export interface Charts { songs: CatalogSong[]; playlists: CatalogPlaylist[]; }
+export interface Recommendation { title: string; playlists: CatalogPlaylist[]; albums: CatalogAlbum[]; }
 
 interface AppleMusicNative {
   requestAuthorization(): Promise<AuthStatus>;
@@ -82,6 +90,11 @@ interface AppleMusicNative {
   requestMusicKitAuthorization(): Promise<string>;
   searchCatalogSongs(term: string, limit: number): Promise<CatalogSong[]>;
   getNowPlayingCatalogArtworkURL(size: number): Promise<string | null>;
+  searchCatalog(term: string, limit: number): Promise<CatalogSearchResults>;
+  getCatalogCharts(limit: number): Promise<Charts>;
+  getRecommendations(limit: number): Promise<Recommendation[]>;
+  getCatalogPlaylistTracks(playlistId: string): Promise<CatalogSong[]>;
+  getRecentlyAddedSongs(limit: number): Promise<LibrarySong[]>;
 }
 
 function requireNative(): AppleMusicNative {
@@ -138,6 +151,14 @@ export const AppleMusic = {
     requireNative().searchCatalogSongs(term, limit),
   getNowPlayingCatalogArtworkURL: (size = 600): Promise<string | null> =>
     requireNative().getNowPlayingCatalogArtworkURL(size),
+  searchCatalog: (term: string, limit = 25): Promise<CatalogSearchResults> =>
+    requireNative().searchCatalog(term, limit),
+  getCatalogCharts: (limit = 20): Promise<Charts> => requireNative().getCatalogCharts(limit),
+  getRecommendations: (limit = 12): Promise<Recommendation[]> => requireNative().getRecommendations(limit),
+  getCatalogPlaylistTracks: (playlistId: string): Promise<CatalogSong[]> =>
+    requireNative().getCatalogPlaylistTracks(playlistId),
+  getRecentlyAddedSongs: (limit = 100): Promise<LibrarySong[]> =>
+    requireNative().getRecentlyAddedSongs(limit),
 };
 
 // Which staged methods actually exist on the linked native module. Use this to
@@ -145,8 +166,11 @@ export const AppleMusic = {
 export const capabilities = {
   librarySearch: typeof (Native as any)?.searchLibrarySongs === 'function',
   libraryPlay: typeof (Native as any)?.playLibrarySongs === 'function',
-  catalogSearch: typeof (Native as any)?.searchCatalogSongs === 'function',
-  catalogArtwork: typeof (Native as any)?.getNowPlayingCatalogArtworkURL === 'function',
+  recentlyAdded: typeof (Native as any)?.getRecentlyAddedSongs === 'function',
+  catalogSearch: typeof (Native as any)?.searchCatalog === 'function',
+  charts: typeof (Native as any)?.getCatalogCharts === 'function',
+  recommendations: typeof (Native as any)?.getRecommendations === 'function',
+  catalogPlaylistTracks: typeof (Native as any)?.getCatalogPlaylistTracks === 'function',
 };
 
 export default AppleMusic;

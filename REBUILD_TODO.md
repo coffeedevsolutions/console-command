@@ -25,12 +25,16 @@ the LIBRARY features; the CATALOG features additionally need the Developer-porta
 
 ### Staged native methods
 - **Library (works on rebuild, no entitlement):**
-  `searchLibrarySongs(term, limit)`, `getAllSongs(limit)`, `playLibrarySongs(persistentIDs)`
-  — MPMediaQuery over your added/downloaded songs (search by title/artist/album, then play).
-- **Catalog (needs MusicKit service):**
-  `searchCatalogSongs(term, limit)`, `requestMusicKitAuthorization()`,
-  `getNowPlayingCatalogArtworkURL(size)` — reliable streaming artwork URL for the current track.
-- Podspec now links `MusicKit` in addition to `MediaPlayer`.
+  `searchLibrarySongs`, `getAllSongs`, `playLibrarySongs`, `getRecentlyAddedSongs`
+  — MPMediaQuery over your added/downloaded songs (search, list, recently-added, play).
+- **Catalog (needs the MusicKit service enabled):**
+  `requestMusicKitAuthorization`, `searchCatalogSongs`, `searchCatalog` (songs+albums+
+  playlists+artists), `getCatalogCharts` (popular), `getRecommendations` (For You),
+  `getCatalogPlaylistTracks`, `getNowPlayingCatalogArtworkURL` (reliable streaming art).
+- Podspec links `MusicKit` in addition to `MediaPlayer`. Catalog charts require iOS 16+.
+- JS: `AppleMusic.capabilities` gains `recentlyAdded`, `charts`, `recommendations`,
+  `catalogPlaylistTracks`, `catalogSearch` — the Library UI already feature-detects these,
+  so the SONGS/SEARCH/APPLE-MUSIC parts light up automatically after the rebuild.
 
 ## Notes
 - When rebuilding, also re-verify the one-build-forever assumptions (no new native deps

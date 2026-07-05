@@ -1,10 +1,11 @@
-// screens/Library.js — browse playlists / songs and search your Apple Music library.
-// Selecting something plays it; if the console is on Phono it first switches to
-// Bluetooth so the audio routes. Playlists work on the current build; song browse +
-// search are gated behind AppleMusic.capabilities (they arrive with the next rebuild).
+// screens/Library.js — one-page music browser: live search at top, a LIBRARY/APPLE
+// MUSIC source selector (Apple Music unlocks after the MusicKit rebuild), and
+// PLAYLISTS/SONGS browse. Selecting anything plays it and, if the console is on
+// Phono, switches it to Bluetooth first. Capability-gated so it never calls a native
+// method that isn't in the running build.
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { dsp } from '../api/dspClient';
@@ -13,14 +14,7 @@ import AppleMusic, { capabilities } from '../modules/apple-music';
 import DottedGrid from '../components/ui/DottedGrid';
 import { color, border, space, type, font } from '../theme/tokens';
 
-const TABS = [
-  { key: 'playlists', label: 'PLAYLISTS' },
-  { key: 'songs', label: 'SONGS' },
-  { key: 'search', label: 'SEARCH' },
-];
-
 export default function Library({ navigation, route }) {
-  const [tab, setTab] = useState(route?.params?.mode === 'search' ? 'search' : 'playlists');
   const { state } = useGrundig1Store();
   const lockCode = state?.global?.lockCode || '';
 
@@ -28,26 +22,48 @@ export default function Library({ navigation, route }) {
   const [auth, setAuth] = useState(available ? AppleMusic.getAuthorizationStatus() : 'unavailable');
   const requestAuth = useCallback(async () => setAuth(await AppleMusic.requestAuthorization()), []);
 
+  const catOK = capabilities.catalogSearch;   // Apple Music catalog (post-rebuild)
+  const libSearchOK = capabilities.librarySearch; // getAllSongs + searchLibrarySongs
+  const libPlayOK = capabilities.libraryPlay;
+
+  const [source, setSource] = useState('library'); // 'library' | 'catalog'
+  const [view, setView] = useState('playlists');   // 'playlists' | 'songs'
+  const [query, setQuery] = useState('');
   const [playlists, setPlaylists] = useState(null);
   const [songs, setSongs] = useState(null);
-  const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [nowKey, setNowKey] = useState(null);
 
-  const canSongs = capabilities.librarySearch; // getAllSongs + searchLibrarySongs present
-  const canPlaySong = capabilities.libraryPlay;
+  const src = catOK ? source : 'library'; // locked to library until catalog is built
+  const searching = query.trim().length > 0;
 
+  // Browse loaders (library)
   useEffect(() => {
-    if (auth !== 'authorized') return;
-    if (tab === 'playlists' && playlists === null) {
+    if (auth !== 'authorized' || searching || src !== 'library') return;
+    if (view === 'playlists' && playlists === null) {
       AppleMusic.getPlaylists().then(setPlaylists).catch(() => setPlaylists([]));
     }
-    if (tab === 'songs' && canSongs && songs === null) {
+    if (view === 'songs' && libSearchOK && songs === null) {
       setBusy(true);
-      AppleMusic.getAllSongs(400).then(setSongs).catch(() => setSongs([])).finally(() => setBusy(false));
+      AppleMusic.getAllSongs(300).then(setSongs).catch(() => setSongs([])).finally(() => setBusy(false));
     }
-  }, [auth, tab, canSongs, playlists, songs]);
+  }, [auth, searching, src, view, libSearchOK, playlists, songs]);
+
+  // Live search (debounced) against the selected source
+  useEffect(() => {
+    if (auth !== 'authorized' || !searching) { setResults(null); return undefined; }
+    const can = src === 'library' ? libSearchOK : catOK;
+    if (!can) { setResults('locked'); return undefined; }
+    const t = setTimeout(async () => {
+      setBusy(true);
+      try {
+        if (src === 'library') setResults(await AppleMusic.searchLibrarySongs(query.trim(), 60));
+        else setResults((await AppleMusic.searchCatalog(query.trim(), 25)).songs || []);
+      } catch { setResults([]); } finally { setBusy(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, src, auth, searching, libSearchOK, catOK]);
 
   const ensureBluetooth = useCallback(async () => {
     try {
@@ -56,26 +72,24 @@ export default function Library({ navigation, route }) {
     } catch { /* console unreachable — start playback on the iPad anyway */ }
   }, [lockCode]);
 
+  const playSong = useCallback(async (item) => {
+    if (item.persistentID) {
+      if (!libPlayOK) return;
+      setNowKey('sg:' + item.persistentID);
+      await ensureBluetooth();
+      AppleMusic.playLibrarySongs([item.persistentID]);
+    } else if (item.id) {
+      setNowKey('cs:' + item.id);
+      await ensureBluetooth();
+      AppleMusic.playStoreIDs([item.id]);
+    }
+  }, [ensureBluetooth, libPlayOK]);
+
   const playPlaylist = useCallback(async (id) => {
     setNowKey('pl:' + id);
     await ensureBluetooth();
     AppleMusic.playPlaylist(id);
   }, [ensureBluetooth]);
-
-  const playSong = useCallback(async (pid) => {
-    if (!canPlaySong) return;
-    setNowKey('sg:' + pid);
-    await ensureBluetooth();
-    AppleMusic.playLibrarySongs([pid]);
-  }, [ensureBluetooth, canPlaySong]);
-
-  const doSearch = useCallback(async () => {
-    if (!canSongs || !query.trim()) return;
-    setBusy(true);
-    try { setResults(await AppleMusic.searchLibrarySongs(query.trim(), 60)); }
-    catch { setResults([]); }
-    finally { setBusy(false); }
-  }, [canSongs, query]);
 
   if (!available || auth === 'denied' || auth === 'restricted') {
     return <Guard onClose={() => navigation.goBack()}
@@ -85,9 +99,30 @@ export default function Library({ navigation, route }) {
   }
   if (auth !== 'authorized') {
     return <Guard onClose={() => navigation.goBack()} title="APPLE MUSIC"
-      body="Grant access to browse and play your library."
+      body="Grant access to browse and play your music."
       action={{ label: 'GRANT ACCESS', onPress: requestAuth }} />;
   }
+
+  // Decide the current list
+  let cur;
+  if (searching) {
+    const can = src === 'library' ? libSearchOK : catOK;
+    cur = !can ? { locked: true } : { kind: 'song', data: Array.isArray(results) ? results : [] };
+  } else if (view === 'playlists') {
+    cur = { kind: 'playlist', data: playlists || [] };
+  } else {
+    cur = !libSearchOK ? { locked: true } : { kind: 'song', data: songs || [] };
+  }
+
+  const renderItem = ({ item }) => {
+    if (cur.kind === 'playlist') {
+      return <Row primary={item.name} secondary={`${item.count} TRACKS`}
+        active={nowKey === 'pl:' + item.id} onPress={() => playPlaylist(item.id)} />;
+    }
+    const key = item.persistentID ? 'sg:' + item.persistentID : 'cs:' + item.id;
+    return <Row primary={item.title} secondary={item.artist}
+      active={nowKey === key} onPress={() => playSong(item)} />;
+  };
 
   return (
     <View style={styles.root}>
@@ -100,61 +135,57 @@ export default function Library({ navigation, route }) {
           </Pressable>
         </View>
 
-        <View style={styles.tabs}>
-          {TABS.map((t) => (
-            <Pressable key={t.key} onPress={() => setTab(t.key)} style={[styles.tab, tab === t.key && styles.tabOn]}>
-              <Text style={[styles.tabText, tab === t.key && styles.tabTextOn]}>{t.label}</Text>
-            </Pressable>
-          ))}
+        {/* Search (live) */}
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          autoFocus={route?.params?.mode === 'search'}
+          autoCorrect={false}
+          returnKeyType="search"
+          placeholder={src === 'library' ? 'Search your library…' : 'Search Apple Music…'}
+          placeholderTextColor={color.textLow}
+          style={styles.search}
+        />
+
+        {/* Source selector */}
+        <View style={styles.seg}>
+          <SegBtn label="LIBRARY" on={src === 'library'} onPress={() => setSource('library')} />
+          <SegBtn label={catOK ? 'APPLE MUSIC' : 'APPLE MUSIC · SOON'} on={src === 'catalog'}
+            disabled={!catOK} onPress={() => catOK && setSource('catalog')} />
         </View>
 
-        <ScrollView style={styles.flex} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
-          {tab === 'search' && (
-            <View style={styles.searchRow}>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={doSearch}
-                returnKeyType="search"
-                editable={canSongs}
-                placeholder={canSongs ? 'Search your library…' : 'Available after next update'}
-                placeholderTextColor={color.textLow}
-                style={styles.searchInput}
-                autoCorrect={false}
-              />
-              <Pressable onPress={doSearch} disabled={!canSongs} style={[styles.searchBtn, !canSongs && styles.dim]}>
-                <Text style={styles.searchBtnText}>GO</Text>
-              </Pressable>
-            </View>
-          )}
+        {/* Browse selector (hidden while searching) */}
+        {!searching && (
+          <View style={styles.seg}>
+            <SegBtn label="PLAYLISTS" on={view === 'playlists'} onPress={() => setView('playlists')} />
+            <SegBtn label="SONGS" on={view === 'songs'} onPress={() => setView('songs')} />
+          </View>
+        )}
 
-          {busy && <ActivityIndicator color={color.accent} style={{ marginTop: space.lg }} />}
-
-          {tab === 'playlists' && (
-            (playlists || []).length === 0 && playlists !== null
-              ? <Empty text="NO PLAYLISTS IN YOUR LIBRARY" />
-              : (playlists || []).map((pl) => (
-                <Row key={pl.id} active={nowKey === 'pl:' + pl.id}
-                  primary={pl.name} secondary={`${pl.count} TRACKS`} onPress={() => playPlaylist(pl.id)} />
-              ))
-          )}
-
-          {tab === 'songs' && (!canSongs
-            ? <Locked />
-            : (songs || []).map((s) => (
-              <Row key={s.persistentID} active={nowKey === 'sg:' + s.persistentID}
-                primary={s.title} secondary={s.artist} onPress={() => playSong(s.persistentID)} />
-            )))}
-
-          {tab === 'search' && (!canSongs
-            ? <Locked />
-            : (results || []).map((s) => (
-              <Row key={s.persistentID} active={nowKey === 'sg:' + s.persistentID}
-                primary={s.title} secondary={s.artist} onPress={() => playSong(s.persistentID)} />
-            )))}
-        </ScrollView>
+        {cur.locked ? (
+          <Locked />
+        ) : (
+          <FlatList
+            data={cur.data}
+            renderItem={renderItem}
+            keyExtractor={(item, i) => item.id || item.persistentID || String(i)}
+            style={styles.flex}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={busy
+              ? <ActivityIndicator color={color.accent} style={{ marginTop: space.xl }} />
+              : <Empty text={searching ? 'NO RESULTS' : 'NOTHING HERE'} />}
+          />
+        )}
       </SafeAreaView>
     </View>
+  );
+}
+
+function SegBtn({ label, on, disabled, onPress }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={[styles.segBtn, on && styles.segOn, disabled && styles.segDim]}>
+      <Text style={[styles.segText, on && styles.segTextOn]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -177,7 +208,7 @@ function Locked() {
     <View style={styles.locked}>
       <Text style={styles.lockedTitle}>ARRIVES WITH NEXT UPDATE</Text>
       <Text style={styles.lockedBody}>
-        Song browsing & search need the next app rebuild. Playlists work now.
+        Song browsing, search, and Apple Music need the next app rebuild. Playlists work now.
       </Text>
     </View>
   );
@@ -215,18 +246,14 @@ const styles = StyleSheet.create({
   closeBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.panel },
   closeGlyph: { color: color.textHi, fontSize: 24, lineHeight: 26, fontWeight: '700' },
 
-  tabs: { flexDirection: 'row', borderWidth: border.thick, borderColor: color.lineStrong, marginBottom: space.md },
-  tab: { flex: 1, paddingVertical: space.md, alignItems: 'center', backgroundColor: color.bgSunken },
-  tabOn: { backgroundColor: color.accent },
-  tabText: { fontFamily: font.mono, fontSize: 12, letterSpacing: 2, color: color.textMid },
-  tabTextOn: { color: color.accentInk, fontWeight: '700' },
+  search: { backgroundColor: color.bgSunken, borderWidth: border.thick, borderColor: color.lineStrong, paddingHorizontal: space.md, paddingVertical: space.md, color: color.textHi, fontFamily: font.mono, marginBottom: space.sm },
 
-  list: { paddingBottom: space.xxl },
-  searchRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
-  searchInput: { flex: 1, backgroundColor: color.bgSunken, borderWidth: border.thick, borderColor: color.lineStrong, paddingHorizontal: space.md, paddingVertical: space.md, color: color.textHi, fontFamily: font.mono },
-  searchBtn: { paddingHorizontal: space.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: color.accent, borderWidth: border.thick, borderColor: color.accent },
-  searchBtnText: { fontFamily: font.display, fontWeight: '800', color: color.accentInk },
-  dim: { opacity: 0.4 },
+  seg: { flexDirection: 'row', borderWidth: border.thick, borderColor: color.lineStrong, marginBottom: space.sm },
+  segBtn: { flex: 1, paddingVertical: space.md, alignItems: 'center', backgroundColor: color.bgSunken },
+  segOn: { backgroundColor: color.accent },
+  segDim: { opacity: 0.4 },
+  segText: { fontFamily: font.mono, fontSize: 11, letterSpacing: 2, color: color.textMid },
+  segTextOn: { color: color.accentInk, fontWeight: '700' },
 
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md, paddingHorizontal: space.md, borderBottomWidth: border.hair, borderBottomColor: color.line, backgroundColor: color.panel, gap: space.md },
   rowPressed: { backgroundColor: color.panelAlt },

@@ -110,6 +110,30 @@ public class AppleMusicModule: Module {
         Task { promise.resolve(await self.catalogArtworkURL(storeID: sid, size: size)) }
       } else { promise.resolve(nil) }
     }
+    // Full catalog search → { songs, albums, playlists, artists }.
+    AsyncFunction("searchCatalog") { (term: String, limit: Int, promise: Promise) in
+      if #available(iOS 15.0, *) { Task { promise.resolve(await self.catalogSearchAll(term, limit: limit)) } }
+      else { promise.resolve([String: Any]()) }
+    }
+    // Popular / charts → { songs, playlists }.
+    AsyncFunction("getCatalogCharts") { (limit: Int, promise: Promise) in
+      if #available(iOS 16.0, *) { Task { promise.resolve(await self.catalogCharts(limit: limit)) } }
+      else { promise.resolve([String: Any]()) }
+    }
+    // "For You" personal recommendations → [{ title, playlists, albums }].
+    AsyncFunction("getRecommendations") { (limit: Int, promise: Promise) in
+      if #available(iOS 15.0, *) { Task { promise.resolve(await self.recommendationsList(limit: limit)) } }
+      else { promise.resolve([[String: Any]]()) }
+    }
+    // Tracks of a catalog playlist → [songs]. Play them with playStoreIDs(their ids).
+    AsyncFunction("getCatalogPlaylistTracks") { (playlistId: String, promise: Promise) in
+      if #available(iOS 15.0, *) { Task { promise.resolve(await self.catalogPlaylistTracks(playlistId)) } }
+      else { promise.resolve([[String: Any]]()) }
+    }
+    // Recently-added library songs (MediaPlayer; no MusicKit entitlement needed).
+    AsyncFunction("getRecentlyAddedSongs") { (limit: Int) -> [[String: Any]] in
+      return self.recentlyAddedSongs(limit: limit)
+    }
 
     // MARK: - Observation lifecycle
     OnStartObserving { self.beginObserving() }
@@ -260,6 +284,123 @@ public class AppleMusicModule: Module {
       return url.absoluteString
     } catch {
       return nil
+    }
+  }
+
+  // MARK: - MusicKit item mappers
+
+  @available(iOS 15.0, *)
+  private func songDict(_ s: Song) -> [String: Any] {
+    return [
+      "id": s.id.rawValue, "title": s.title, "artist": s.artistName,
+      "albumTitle": s.albumTitle ?? "", "duration": s.duration ?? 0,
+      "artworkURL": s.artwork?.url(width: 300, height: 300)?.absoluteString ?? ""
+    ]
+  }
+  @available(iOS 15.0, *)
+  private func playlistDict(_ p: Playlist) -> [String: Any] {
+    return [
+      "id": p.id.rawValue, "name": p.name, "curator": p.curatorName ?? "",
+      "artworkURL": p.artwork?.url(width: 300, height: 300)?.absoluteString ?? ""
+    ]
+  }
+  @available(iOS 15.0, *)
+  private func albumDict(_ a: Album) -> [String: Any] {
+    return [
+      "id": a.id.rawValue, "title": a.title, "artist": a.artistName,
+      "artworkURL": a.artwork?.url(width: 300, height: 300)?.absoluteString ?? ""
+    ]
+  }
+  @available(iOS 15.0, *)
+  private func artistDict(_ a: Artist) -> [String: Any] {
+    return ["id": a.id.rawValue, "name": a.name]
+  }
+
+  // MARK: - Catalog requests (MusicKit)
+
+  @available(iOS 15.0, *)
+  private func catalogSearchAll(_ term: String, limit: Int) async -> [String: Any] {
+    do {
+      var request = MusicCatalogSearchRequest(term: term, types: [Song.self, Album.self, Playlist.self, Artist.self])
+      request.limit = limit > 0 ? min(limit, 25) : 25
+      let r = try await request.response()
+      return [
+        "songs": r.songs.map { self.songDict($0) },
+        "albums": r.albums.map { self.albumDict($0) },
+        "playlists": r.playlists.map { self.playlistDict($0) },
+        "artists": r.artists.map { self.artistDict($0) }
+      ]
+    } catch {
+      return ["songs": [], "albums": [], "playlists": [], "artists": []]
+    }
+  }
+
+  @available(iOS 16.0, *)
+  private func catalogCharts(limit: Int) async -> [String: Any] {
+    do {
+      var request = MusicCatalogChartsRequest(kinds: [.mostPlayed], types: [Song.self, Playlist.self])
+      request.limit = limit > 0 ? min(limit, 25) : 20
+      let r = try await request.response()
+      let songs = r.songCharts.first?.items.map { self.songDict($0) } ?? []
+      let playlists = r.playlistCharts.first?.items.map { self.playlistDict($0) } ?? []
+      return ["songs": songs, "playlists": playlists]
+    } catch {
+      return ["songs": [], "playlists": []]
+    }
+  }
+
+  @available(iOS 15.0, *)
+  private func recommendationsList(limit: Int) async -> [[String: Any]] {
+    do {
+      var request = MusicPersonalRecommendationsRequest()
+      request.limit = limit > 0 ? min(limit, 25) : 12
+      let r = try await request.response()
+      return r.recommendations.map { rec in
+        [
+          "title": rec.title ?? "",
+          "playlists": rec.playlists.map { self.playlistDict($0) },
+          "albums": rec.albums.map { self.albumDict($0) }
+        ]
+      }
+    } catch {
+      return []
+    }
+  }
+
+  @available(iOS 15.0, *)
+  private func catalogPlaylistTracks(_ id: String) async -> [[String: Any]] {
+    do {
+      let request = MusicCatalogResourceRequest<Playlist>(matching: \.id, equalTo: MusicItemID(id))
+      let r = try await request.response()
+      guard let playlist = r.items.first else { return [] }
+      let full = try await playlist.with([.tracks])
+      guard let tracks = full.tracks else { return [] }
+      return tracks.map { track in
+        [
+          "id": track.id.rawValue, "title": track.title, "artist": track.artistName,
+          "albumTitle": "", "duration": track.duration ?? 0,
+          "artworkURL": track.artwork?.url(width: 200, height: 200)?.absoluteString ?? ""
+        ]
+      }
+    } catch {
+      return []
+    }
+  }
+
+  // MARK: - Recently added (MediaPlayer library)
+
+  private func recentlyAddedSongs(limit: Int) -> [[String: Any]] {
+    guard let items = MPMediaQuery.songs().items else { return [] }
+    let sorted = items.sorted { $0.dateAdded > $1.dateAdded }
+    let capped = limit > 0 ? Array(sorted.prefix(limit)) : sorted
+    return capped.map { item in
+      [
+        "persistentID": String(item.persistentID),
+        "playbackStoreID": item.playbackStoreID,
+        "title": item.title ?? "", "artist": item.artist ?? "",
+        "albumTitle": item.albumTitle ?? "", "duration": item.playbackDuration,
+        "hasArtwork": item.artwork != nil
+      ]
     }
   }
 
