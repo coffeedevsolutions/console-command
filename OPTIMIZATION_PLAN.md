@@ -112,6 +112,13 @@ blur/background pausing**: connection 4s, lid 3s (+1s dupe until Phase 0.3), seg
 app-wide Grundig 5s. Every request wakes the Wi-Fi radio (high-power tail ~seconds). This phase
 makes polling **focus-aware, background-aware, and coordinated**.
 
+**Status:** 1.4 + 1.5 ✅ SHIPPED (the two biggest, cleanest wins — see below). 1.1 (the
+`useFocusedInterval` refactor of the connection/lid polls) + 1.2 (coordinator) are **deferred** to a
+later OTA: they're incremental next to 1.4/1.5 and touch the always-mounted connection hook, so they
+want on-device confirmation first. **Verify on device:** open Now Playing / Library, confirm the
+console still reflects source + lid state on return, and that the Grundig1 screen still syncs live
+while open.
+
 ### 1.1 `useFocusedInterval` utility
 - **Impact:** one reusable hook = a `setInterval` that **pauses on screen blur** (`useIsFocused`,
   react-navigation) and **on `AppState` background**, resuming (with an immediate refresh) on
@@ -140,7 +147,10 @@ No longer applies: the LED segments and their app-orchestrated sync are deleted 
 hardware-visible polling tradeoff remains** — the lid-light poll is purely display state. Phase 5.3
 (firmware link-mode) is dropped for the same reason.
 
-### 1.4 Gate the Grundig store's 5s poll
+### 1.4 Gate the Grundig store's 5s poll · ✅ SHIPPED
+Implemented via a `pollActiveRef` on the provider that the Grundig1 screen flips true/false with
+`useFocusEffect`; the 5s interval early-returns unless that screen is focused. The app-wide
+`/api/state` fetch (and its radio wake) is now gone on Status / Now Playing / Library.
 - **Impact:** `grundig1Store.js:471-491` fetches full `/api/state` every 5s **app-wide** (the
   provider wraps all screens) even though only the Grundig1 screen uses it. Gate it to that screen.
 - **Hardware-safety:** ✅ **and it fixes a bug** — the SYNC reducer drops `global.lockCode`, so the
@@ -151,7 +161,11 @@ hardware-visible polling tradeoff remains** — the lid-light poll is purely dis
 - **Effort:** S · **Research:** verify no non-grundig consumer relies on synced fields (confirmed:
   they only read `lockCode`). · **OTA:** ✅
 
-### 1.5 Slow the Now-Playing position poll on the command center
+### 1.5 Slow the Now-Playing position poll on the command center · ✅ SHIPPED
+Implemented via a `poll` flag on `useNowPlaying` driven by `useIsFocused()` in `Status`: the
+mini-bar's 1s position poll now **pauses whenever a modal (Now Playing / Library) is on top**, and
+resumes with an immediate seed refresh on return. Track/artist/state keep updating via change events
+throughout, so nothing goes stale — this also kills the double-poll while Now Playing is open.
 - **Impact:** `Status.js:51` runs `useNowPlaying({pollMs:1000})` purely for the mini-bar's live
   timestamp — a native call every second, forever, on the main screen (plus a 2nd instance at 500ms
   when NowPlaying is open). Track/artist/state already arrive via **change events**; drop the
@@ -301,7 +315,7 @@ phases — no feature is allowed to reintroduce the drag Phase 0–2 removed.
 1. **OTA #1:** **Phase A** (remove segments + lock code) — biggest readability/perf win, deletes a
    poll, and clears the plan's only hardware caveat. Do this first.
 2. **OTA #2:** Phase 0 (0.1–0.3) — tiny, zero-risk render/log hygiene (0.3 folds into A.1). ✅ SHIPPED
-3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free).
+3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free). ✅ 1.4 + 1.5 SHIPPED; 1.1 deferred.
 4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation).
 5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix).
 6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 +

@@ -421,6 +421,10 @@ export function Grundig1Provider({ children }) {
   const apiQueueRef = useRef([]);
   const processingRef = useRef(false);
   const isDraggingRef = useRef(false); // Flag to track if any knob is being dragged
+  // The 5s device sync only matters while the Grundig1 screen is open — nothing else consumes
+  // this store. The screen sets this true on focus / false on blur, so the poll (and its Wi-Fi
+  // radio wake) stops running app-wide on the command center, Now Playing, and Library.
+  const pollActiveRef = useRef(false);
 
   // Auto-save to AsyncStorage
   useEffect(() => {
@@ -467,14 +471,15 @@ export function Grundig1Provider({ children }) {
     initState();
   }, []);
 
-  // Periodic sync from Arduino (every 5 seconds)
+  // Periodic sync from Arduino (every 5 seconds) — only while the Grundig1 screen is focused.
   useEffect(() => {
     const interval = setInterval(async () => {
-      // Skip sync if user is actively dragging to prevent overwriting values
-      if (isDraggingRef.current) {
+      // Skip when the Grundig1 screen isn't open (nothing else uses this state), or while a
+      // knob is being dragged (prevents overwriting the value under the finger).
+      if (!pollActiveRef.current || isDraggingRef.current) {
         return;
       }
-      
+
       try {
         const arduinoState = await syncFromArduino();
         if (arduinoState) {
@@ -620,7 +625,7 @@ export function Grundig1Provider({ children }) {
   };
 
   return (
-    <Grundig1Context.Provider value={{ state, dispatch: enhancedDispatch, actions, isDraggingRef }}>
+    <Grundig1Context.Provider value={{ state, dispatch: enhancedDispatch, actions, isDraggingRef, pollActiveRef }}>
       {children}
     </Grundig1Context.Provider>
   );

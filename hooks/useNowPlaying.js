@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AppleMusic from '../modules/apple-music';
 
-export function useNowPlaying({ pollMs = 500, artworkSize = 600, loadArtwork = true } = {}) {
+export function useNowPlaying({ pollMs = 500, artworkSize = 600, loadArtwork = true, poll = true } = {}) {
   const available = AppleMusic.isAvailable;
   const [auth, setAuth] = useState(available ? 'notDetermined' : 'unavailable');
   const [track, setTrack] = useState(null);
@@ -74,12 +74,15 @@ export function useNowPlaying({ pollMs = 500, artworkSize = 600, loadArtwork = t
     return () => subs.forEach((s) => s?.remove?.());
   }, [available, auth, refreshTrack, refreshState]);
 
-  // Poll playback position while authorized (events don't tick per-second).
+  // Poll playback position while authorized (events don't tick per-second). Gated by `poll`
+  // so a caller can pause the per-second native call when its screen isn't focused —
+  // track/state stay fresh via the change-event listeners above regardless.
   useEffect(() => {
-    if (!available || auth !== 'authorized') return undefined;
+    if (!available || auth !== 'authorized' || !poll) return undefined;
+    refreshState(); // seed immediately so a resumed poll shows the current position at once
     timer.current = setInterval(refreshState, pollMs);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [available, auth, pollMs, refreshState]);
+  }, [available, auth, pollMs, poll, refreshState]);
 
   useEffect(() => () => { if (artTimer.current) clearTimeout(artTimer.current); }, []);
 

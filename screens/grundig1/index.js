@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Button, Alert, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +24,15 @@ import { colors, typography, spacing } from './theme';
 function Grundig1Screen() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedChannel, setSelectedChannel] = useState('ch1');
-  const { state, dispatch, actions } = useGrundig1Store();
+  const { state, dispatch, actions, pollActiveRef } = useGrundig1Store();
+
+  // Run the store's 5s device sync only while this screen is on top.
+  useFocusEffect(
+    useCallback(() => {
+      pollActiveRef.current = true;
+      return () => { pollActiveRef.current = false; };
+    }, [pollActiveRef])
+  );
 
   const tabs = [
     { id: 'home', label: 'Home' },

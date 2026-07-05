@@ -5,6 +5,7 @@ import {
   ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { dsp } from '../api/dspClient';
 import { useConnection } from '../hooks/useConnection';
 import { useNowPlaying } from '../hooks/useNowPlaying';
@@ -29,6 +30,7 @@ const SOURCES = [
 
 export default function Status({ navigation }) {
   const conn = useConnection();
+  const isFocused = useIsFocused(); // pause the mini-bar position poll while a modal is on top
 
   const [urlDraft, setUrlDraft] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -42,7 +44,9 @@ export default function Status({ navigation }) {
   const [reveal, setReveal] = useState(false);
   const heroImgRef = useRef(null);
 
-  const np = useNowPlaying({ pollMs: 1000, loadArtwork: false });
+  // Mini-bar only needs track/state (arrive via change events) + a coarse timestamp. Pause its
+  // per-second position poll when NowPlaying/Library is over the top (that screen polls its own).
+  const np = useNowPlaying({ pollMs: 1000, loadArtwork: false, poll: isFocused });
 
   useEffect(() => { setUrlDraft(conn.baseUrl); }, [conn.baseUrl]);
   useEffect(() => {
