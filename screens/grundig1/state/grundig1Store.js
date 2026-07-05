@@ -604,10 +604,13 @@ export function Grundig1Provider({ children }) {
 
     const processQueue = async () => {
       processingRef.current = true;
-      const { action, state: newState } = apiQueueRef.current.pop();
+      const { action } = apiQueueRef.current.pop();
       apiQueueRef.current = []; // Clear queue
 
-      await pushToArduino.current(action, newState);
+      // Use the fresh post-update `state` from this effect's closure (the effect re-runs on every
+      // state change) — NOT a value captured at dispatch time, which is the PRE-update state and
+      // sends the device the previous value (off-by-one).
+      await pushToArduino.current(action, state);
       processingRef.current = false;
     };
 
@@ -618,9 +621,10 @@ export function Grundig1Provider({ children }) {
   // Enhanced dispatch that queues API calls
   const enhancedDispatch = (action) => {
     dispatch(action);
-    // Queue for Arduino sync (non-local actions)
+    // Queue for Arduino sync (non-local actions). Only the action is queued; the value pushed to
+    // the device is read from the fresh state in the queue processor above (see note there).
     if (!action.type.includes('RESTORE') && !action.type.includes('SYNC')) {
-      apiQueueRef.current.push({ action, state });
+      apiQueueRef.current.push({ action });
     }
   };
 

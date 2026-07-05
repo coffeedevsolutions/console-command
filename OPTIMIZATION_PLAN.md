@@ -213,7 +213,14 @@ are the only subtrees that read position, so the 500ms tick re-renders just thos
 
 ---
 
-## Phase 3 — Replace hand-rolled sliders (OTA)
+## Phase 3 — Replace hand-rolled sliders (OTA) · ✅ SHIPPED
+Done for the main app: `LidLightCard`'s brightness slider is now `@react-native-community/slider`
+— `onValueChange` drives the thumb (display only, `isDragging` guard suppresses the poll snap-back),
+`onSlidingComplete` POSTs once on release. Deleted the PanResponder + `measure()` + 1.5s timer +
+their refs (~90 LOC). **Scope note:** `LedSegmentCard` no longer exists (Phase A). `CustomSlider.js`
+is used only by the Grundig1 `Fader` (out of scope) so it's **kept**; `ColorPicker.js` is a wheel,
+not a slider, so it stays. **Verify on device:** drag lid brightness — smooth, and the light lands
+on the released value.
 - **Impact:** `LidLightCard`, `LedSegmentCard`, and `CustomSlider.js` implement sliders via
   `PanResponder` + manual `measure()` + debounce timers (~hundreds of LOC, much of the remaining
   logging). `@react-native-community/slider` is **installed and unused** — native, smoother, far
@@ -230,7 +237,12 @@ are the only subtrees that read position, so the 500ms tick re-renders just thos
 
 ---
 
-## Phase 4 — Store correctness: `enhancedDispatch` stale state (OTA)
+## Phase 4 — Store correctness: `enhancedDispatch` stale state (OTA) · ✅ SHIPPED
+Fixed: `enhancedDispatch` now queues only `{ action }`, and the debounced processor reads the
+**fresh post-update `state`** from its own effect closure (the effect already depends on `[state]`)
+before calling `pushToArduino`. Device writes now send the current value, not the previous one.
+**Verify on device:** change master / EQ / a channel setting on the Grundig1 screen — the console
+should land on exactly what you set (no off-by-one).
 - **Impact:** `grundig1Store.js:614-620` queues `{action, state}` with the **pre-update** closure
   `state`, so the debounced `pushToArduino` sends the **previous** value for every device-write
   action (master, source, EQ, channel, limiter, generator, sequencer, preset). This is the same
@@ -329,7 +341,7 @@ phases — no feature is allowed to reintroduce the drag Phase 0–2 removed.
 2. **OTA #2:** Phase 0 (0.1–0.3) — tiny, zero-risk render/log hygiene (0.3 folds into A.1). ✅ SHIPPED
 3. **OTA #3:** Phase 1.4 + 1.5 + 1.1 (the poll/focus win — now caveat-free). ✅ 1.4 + 1.5 SHIPPED; 1.1 deferred.
 4. **OTA #4:** Phase 2 (Now Playing provider + progress isolation). ✅ SHIPPED
-5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix).
+5. **OTA #5:** Phase 3 (lid slider → community `Slider`) + Phase 4 (store fix). ✅ SHIPPED
 6. **Next rebuild:** Phase 5.1 (auto-dim) with the MusicKit build. **Next firmware:** 5.2 +
    single-zone LED revert (5.3), and optionally delete `/api/lock`.
 

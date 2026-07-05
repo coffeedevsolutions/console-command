@@ -1,6 +1,7 @@
 // components/LidLightCard.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Switch, TouchableOpacity, StyleSheet, PanResponder } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, StyleSheet } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { useLidLight } from '../hooks/useLidLight';
 import ColorPicker from './ColorPicker';
 import { theme } from '../theme/tokens';
@@ -27,27 +28,12 @@ export default function LidLightCard() {
 
   const [sliderBrightness, setSliderBrightness] = useState(0);
   const [colorOpen, setColorOpen] = useState(false); // color wheel collapsed by default
-  const sliderLayoutRef = useRef({ x: 0, y: 0, width: 300, height: 40 });
-  const isDragging = useRef(false);
-  const pendingBrightnessRef = useRef(null);
-  const brightnessTimerRef = useRef(null);
-  const hasPendingBrightnessChange = useRef(false);
+  const isDragging = useRef(false); // suppress the poll from snapping the slider mid-drag
 
-  // Update slider brightness when brightness changes (only if not dragging or pending change)
+  // Mirror device brightness into the slider, except while the user is dragging it.
   useEffect(() => {
-    if (!isDragging.current && !hasPendingBrightnessChange.current) {
-      setSliderBrightness(brightness);
-    }
+    if (!isDragging.current) setSliderBrightness(brightness);
   }, [brightness]);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (brightnessTimerRef.current) {
-        clearTimeout(brightnessTimerRef.current);
-      }
-    };
-  }, []);
 
   const controlsDisabled = loading || pendingAction;
 
@@ -56,97 +42,15 @@ export default function LidLightCard() {
     setPower(value);
   };
 
-  // Handle brightness change (debounced)
+  // Push brightness to the device (called on slider release).
   const handleBrightnessChange = (value) => {
-    const clampedValue = Math.max(0, Math.min(100, Math.round(value)));
-    setBrightness(clampedValue);
-    hasPendingBrightnessChange.current = false;
+    setBrightness(Math.max(0, Math.min(100, Math.round(value))));
   };
 
   // Handle preset selection
   const handlePresetPress = (preset) => {
     setPreset(preset);
   };
-
-  // Calculate brightness from touch position
-  const calculateBrightnessFromTouch = useRef((pageX) => {
-    const layout = sliderLayoutRef.current;
-    const touchX = pageX - layout.x;
-    const percentage = (touchX / layout.width) * 100;
-    return Math.max(0, Math.min(100, percentage));
-  }).current;
-
-  // Create pan responder for brightness slider with debouncing
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => {
-        return !controlsDisabled && sliderLayoutRef.current.width > 0;
-      },
-      onStartShouldSetPanResponderCapture: () => {
-        // Capture the touch immediately, don't let parent views intercept
-        return !controlsDisabled && sliderLayoutRef.current.width > 0;
-      },
-      onMoveShouldSetPanResponder: () => {
-        return !controlsDisabled && sliderLayoutRef.current.width > 0;
-      },
-      onMoveShouldSetPanResponderCapture: () => {
-        // Keep control during movement
-        return true;
-      },
-      onPanResponderTerminationRequest: () => {
-        // Don't allow other components to terminate our gesture
-        return false;
-      },
-      onPanResponderGrant: (evt) => {
-        // Cancel any pending API call if user starts dragging again
-        if (brightnessTimerRef.current) {
-          clearTimeout(brightnessTimerRef.current);
-          brightnessTimerRef.current = null;
-          hasPendingBrightnessChange.current = false;
-        }
-        
-        isDragging.current = true;
-        const newValue = calculateBrightnessFromTouch(evt.nativeEvent.pageX);
-        setSliderBrightness(newValue);
-        pendingBrightnessRef.current = newValue;
-      },
-      onPanResponderMove: (evt) => {
-        const newValue = calculateBrightnessFromTouch(evt.nativeEvent.pageX);
-        setSliderBrightness(newValue);
-        pendingBrightnessRef.current = newValue;
-      },
-      onPanResponderRelease: () => {
-        isDragging.current = false;
-        
-        // Clear any existing timer
-        if (brightnessTimerRef.current) {
-          clearTimeout(brightnessTimerRef.current);
-        }
-        
-        // Set new timer - only send after 1.5 seconds of no movement
-        if (pendingBrightnessRef.current !== null) {
-          const valueToSend = pendingBrightnessRef.current;
-          hasPendingBrightnessChange.current = true; // Prevent polling from overwriting
-          brightnessTimerRef.current = setTimeout(() => {
-            handleBrightnessChange(valueToSend);
-            brightnessTimerRef.current = null;
-          }, 1500);
-          pendingBrightnessRef.current = null;
-        }
-      },
-      onPanResponderTerminate: () => {
-        isDragging.current = false;
-        pendingBrightnessRef.current = null;
-        hasPendingBrightnessChange.current = false;
-        
-        // Cancel pending API call on terminate
-        if (brightnessTimerRef.current) {
-          clearTimeout(brightnessTimerRef.current);
-          brightnessTimerRef.current = null;
-        }
-      },
-    })
-  ).current;
 
   // Preset color definitions for visual feedback
   const presets = [
@@ -207,33 +111,19 @@ export default function LidLightCard() {
           <Text style={styles.controlLabel}>Brightness:</Text>
           <Text style={styles.brightnessValue}>{Math.round(sliderBrightness)}%</Text>
         </View>
-        <View
-          style={styles.sliderContainer}
-          onLayout={(event) => {
-            // Store layout for touch calculations
-            const { layout } = event.nativeEvent;
-            event.target.measure((x, y, width, height, pageX, pageY) => {
-              sliderLayoutRef.current = { x: pageX, y: pageY, width, height };
-            });
-          }}
-          onStartShouldSetResponderCapture={() => true}
-          {...panResponder.panHandlers}
-        >
-          <View style={styles.sliderRail} />
-          <View
-            style={[
-              styles.sliderTrack,
-              { width: `${sliderBrightness}%` },
-            ]}
-          />
-          <View
-            style={[
-              styles.sliderThumb,
-              { left: `${sliderBrightness}%` },
-              controlsDisabled && styles.sliderThumbDisabled,
-            ]}
-          />
-        </View>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={100}
+          step={1}
+          value={sliderBrightness}
+          onValueChange={(v) => { isDragging.current = true; setSliderBrightness(v); }}
+          onSlidingComplete={(v) => { isDragging.current = false; handleBrightnessChange(v); }}
+          disabled={controlsDisabled}
+          minimumTrackTintColor={T.color.accent}
+          maximumTrackTintColor={T.color.lineStrong}
+          thumbTintColor={T.color.textHi}
+        />
       </View>
 
       {/* Presets */}
@@ -319,15 +209,7 @@ const styles = StyleSheet.create({
   dropdownChevron: { color: T.color.accent, fontSize: 12 },
   brightnessHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brightnessValue: { ...T.type.meta, color: T.color.accent, fontSize: 12 },
-  sliderContainer: { height: 40, justifyContent: 'center', position: 'relative' },
-  sliderRail: { height: 4, backgroundColor: T.color.bgSunken, borderWidth: T.border.hair, borderColor: T.color.lineStrong },
-  sliderTrack: { position: 'absolute', height: 4, backgroundColor: T.color.accent },
-  sliderThumb: {
-    position: 'absolute', width: 16, height: 22, borderRadius: T.radius.none,
-    backgroundColor: T.color.accent, borderWidth: T.border.thick, borderColor: T.color.accentInk,
-    marginLeft: -8,
-  },
-  sliderThumbDisabled: { opacity: 0.5 },
+  slider: { width: '100%', height: 40 },
   presetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: T.space.sm },
   presetChip: {
     paddingVertical: T.space.sm, paddingHorizontal: T.space.md, borderRadius: T.radius.none,
