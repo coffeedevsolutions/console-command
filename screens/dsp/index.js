@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DottedGrid from '../../components/ui/DottedGrid';
 import { useDspConsole } from '../../hooks/useDspConsole';
 import { color, radius, border, space, type } from '../../theme/tokens';
+import Dashboard from './sections/Dashboard';
 import Levels from './sections/Levels';
 import Geq from './sections/Geq';
 import Peq from './sections/Peq';
@@ -16,6 +17,7 @@ import Tools from './sections/Tools';
 import Presets from './sections/Presets';
 
 const TABS = [
+  { id: 'dash', label: 'DASHBOARD' },
   { id: 'levels', label: 'LEVELS' },
   { id: 'geq', label: 'GEQ' },
   { id: 'peq', label: 'PEQ' },
@@ -50,7 +52,7 @@ const TabBar = memo(function TabBar({ active, onPick }) {
 
 export default function DspConsole({ navigation }) {
   const api = useDspConsole();
-  const [tab, setTab] = React.useState('levels');
+  const [tab, setTab] = React.useState('dash');
   const st = api.st;
   const disabled = !st;
 
@@ -93,6 +95,7 @@ export default function DspConsole({ navigation }) {
             <Text style={styles.loading}>Connecting to console…</Text>
           ) : (
             <>
+              {tab === 'dash' && <Dashboard st={st} api={api} disabled={disabled} />}
               {tab === 'levels' && <Levels st={st} api={api} disabled={disabled} />}
               {tab === 'geq' && <Geq st={st} api={api} disabled={disabled} />}
               {tab === 'peq' && <Peq st={st} api={api} disabled={disabled} />}
