@@ -35,7 +35,7 @@ const LINK = {
 
 const TabBar = memo(function TabBar({ active, onPick }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar} contentContainerStyle={styles.tabs}>
       {TABS.map((t) => {
         const on = active === t.id;
         return (
@@ -88,7 +88,7 @@ export default function DspConsole({ navigation }) {
 
         <TabBar active={tab} onPick={setTab} />
 
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.body} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!st ? (
             <Text style={styles.loading}>Connecting to console…</Text>
           ) : (
@@ -128,12 +128,16 @@ const styles = StyleSheet.create({
   banner: { marginHorizontal: space.lg, marginBottom: space.sm, borderLeftWidth: border.thick, borderColor: color.warn, backgroundColor: color.panel, padding: space.sm },
   bannerTxt: { ...type.meta, color: color.textMid, lineHeight: 15 },
 
-  tabs: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.lg, paddingBottom: space.md },
-  tab: { paddingVertical: space.sm, paddingHorizontal: space.md, borderWidth: border.thick, borderRadius: radius.none },
+  // flexGrow:0 keeps the horizontal tab strip at its own content height instead of stretching to
+  // fill the column's free space (which made it track the selected tab's content height).
+  tabBar: { flexGrow: 0, flexShrink: 0 },
+  tabs: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingBottom: space.md },
+  tab: { height: 40, justifyContent: 'center', paddingHorizontal: space.md, borderWidth: border.thick, borderRadius: radius.none },
   tabOn: { backgroundColor: color.accent, borderColor: color.accent },
   tabOff: { backgroundColor: color.bgSunken, borderColor: color.lineStrong },
   tabTxt: { ...type.tag, fontSize: 11, color: color.textMid },
 
+  body: { flex: 1 },
   scroll: { paddingHorizontal: space.lg, gap: space.md },
   loading: { ...type.meta, color: color.textLow, textAlign: 'center', marginTop: space.huge },
 });
