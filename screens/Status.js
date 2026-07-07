@@ -248,8 +248,20 @@ export default function Status({ navigation }) {
             <LidLightCard />
           </Reveal>
 
-          {/* NAV */}
+          {/* DSP CONSOLE — primary entry to the audio dashboard */}
+          <Reveal index={5}><Text style={styles.groupLabel}>◦ AUDIO PROCESSOR</Text></Reveal>
           <Reveal index={5}>
+            <Pressable onPress={() => navigation.navigate('DspConsole')} style={styles.dspBtn}>
+              <View style={styles.dspBtnLeft}>
+                <Text style={styles.dspBtnTitle}>DSP CONSOLE</Text>
+                <Text style={styles.dspBtnSub}>TIMPANO TPT-SP4BT · EQ · XOVER · LIMITER</Text>
+              </View>
+              <Text style={styles.dspBtnArrow}>→</Text>
+            </Pressable>
+          </Reveal>
+
+          {/* NAV */}
+          <Reveal index={6}>
             <View style={styles.row}>
               <Pressable onPress={() => navigation.navigate('Controls')} style={[styles.navBtn]}>
                 <Text style={styles.navText}>CONTROLS</Text>
@@ -350,6 +362,17 @@ const styles = StyleSheet.create({
   },
   navText: { ...type.tag, color: color.textHi, fontSize: 12 },
   navArrow: { color: color.accent, fontSize: 16, fontWeight: '800' },
+
+  // DSP console primary entry
+  dspBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: color.panelAlt, borderWidth: border.thick, borderColor: color.accent,
+    borderRadius: radius.none, paddingVertical: space.lg, paddingHorizontal: space.lg,
+  },
+  dspBtnLeft: { flex: 1, gap: 2 },
+  dspBtnTitle: { ...type.h2, color: color.textHi },
+  dspBtnSub: { ...type.meta, color: color.accent },
+  dspBtnArrow: { color: color.accent, fontSize: 22, fontWeight: '800' },
   npRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   libRow: { flexDirection: 'row', gap: space.sm },
   libBtn: {
