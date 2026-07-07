@@ -3,11 +3,12 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import PresetSlots from '../../../components/dsp/PresetSlots';
+import { Grid } from '../../../components/dsp/Responsive';
 import { color, radius, border, space, type } from '../../../theme/tokens';
 
 export default function Presets({ api, disabled }) {
   return (
-    <View style={styles.wrap}>
+    <Grid>
       <PresetSlots api={api} disabled={disabled} />
 
       <Panel label="Device Link" code="ADVANCED" contentStyle={styles.stack}>
@@ -24,7 +25,7 @@ export default function Presets({ api, disabled }) {
           </Pressable>
         </View>
       </Panel>
-    </View>
+    </Grid>
   );
 }
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import FaderColumn from '../../../components/dsp/FaderColumn';
+import { Solo } from '../../../components/dsp/Responsive';
 import { RANGE, GEQ_HZ, GEQ_PRESETS, fmtHz } from '../../../api/dspUnits';
 import { color, radius, border, space, type } from '../../../theme/tokens';
 
@@ -10,7 +11,7 @@ const COL_W = 46;
 
 export default function Geq({ st, api, disabled }) {
   return (
-    <View style={styles.wrap}>
+    <Solo>
       <Panel label="Graphic EQ" code={`15-BAND · ±12 dB`} ticks contentStyle={styles.stack}>
         {/* horizontal fader bank — snaps by column so bands land cleanly */}
         <ScrollView
@@ -54,7 +55,7 @@ export default function Geq({ st, api, disabled }) {
           })}
         </View>
       </Panel>
-    </View>
+    </Solo>
   );
 }
 

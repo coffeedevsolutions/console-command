@@ -6,13 +6,14 @@ import { View, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import { SchematicSlider } from '../../../components/dsp/Controls';
 import PresetSlots from '../../../components/dsp/PresetSlots';
+import { Solo } from '../../../components/dsp/Responsive';
 import { RANGE } from '../../../api/dspUnits';
 import Geq from './Geq';
 import { space } from '../../../theme/tokens';
 
 export default function Dashboard({ st, api, disabled }) {
   return (
-    <View style={styles.wrap}>
+    <Solo>
       {/* Master output level */}
       <Panel label="Master" code={`${st.master}%`} ticks>
         <SchematicSlider
@@ -29,7 +30,7 @@ export default function Dashboard({ st, api, disabled }) {
 
       {/* ESP32 preset slots */}
       <PresetSlots api={api} disabled={disabled} />
-    </View>
+    </Solo>
   );
 }
 

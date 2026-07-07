@@ -3,12 +3,13 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import { SchematicSlider, Segmented, Toggle, Field } from '../../../components/dsp/Controls';
+import { Grid } from '../../../components/dsp/Responsive';
 import { RANGE, ROUTES, POLARITY, fmtDb, labelFor } from '../../../api/dspUnits';
 import { color, space, type } from '../../../theme/tokens';
 
 export default function Levels({ st, api, disabled }) {
   return (
-    <View style={styles.wrap}>
+    <Grid>
       <Panel label="Master" code={`${st.master}%`} ticks>
         <SchematicSlider
           label="Output Level" value={st.master}
@@ -43,7 +44,7 @@ export default function Levels({ st, api, disabled }) {
         </Panel>
       ))}
       <Text style={styles.note}>Muting a channel disables its gain fader. Route enum pending CAL(C8).</Text>
-    </View>
+    </Grid>
   );
 }
 

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import { SchematicSlider, Segmented, Toggle, Field } from '../../../components/dsp/Controls';
+import { Grid } from '../../../components/dsp/Responsive';
 import { RANGE, SLOPES, fmtHz, fmtDb, labelFor } from '../../../api/dspUnits';
 import { color, space, type } from '../../../theme/tokens';
 
@@ -14,7 +15,7 @@ export default function Channel({ st, api, disabled }) {
   const limOff = o.limiter.thresholdDb >= 0;
 
   return (
-    <View style={styles.wrap}>
+    <Grid>
       <Panel label="Channel Select" code={`EDITING CH${ch + 1}`}>
         <Segmented options={CHANNELS} value={ch} onChange={setCh} />
       </Panel>
@@ -89,7 +90,7 @@ export default function Channel({ st, api, disabled }) {
         Crossover slope "OFF" bypasses that filter. Limiter threshold at 0 dB = disabled;
         attack/release units and slope enum resolve on the hardware calibration pass.
       </Text>
-    </View>
+    </Grid>
   );
 }
 

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import { SchematicSlider, Segmented, Field } from '../../../components/dsp/Controls';
+import { Solo } from '../../../components/dsp/Responsive';
 import { RANGE, fmtHz, fmtDb } from '../../../api/dspUnits';
 import { color, space, type } from '../../../theme/tokens';
 
@@ -14,7 +15,7 @@ export default function Peq({ st, api, disabled }) {
   const b = st.peq[sel];
 
   return (
-    <View style={styles.wrap}>
+    <Solo>
       <Panel label="Parametric EQ" code={`5-BAND · B${sel + 1}`} ticks contentStyle={styles.stack}>
         <Field label="Band">
           <Segmented options={BANDS} value={sel} onChange={setSel} />
@@ -49,7 +50,7 @@ export default function Peq({ st, api, disabled }) {
         The DSP exposes 5 parametric bands total, each assignable to an output channel — not
         a per-channel bank. Q wire-encoding pending CAL(C3).
       </Text>
-    </View>
+    </Solo>
   );
 }
 

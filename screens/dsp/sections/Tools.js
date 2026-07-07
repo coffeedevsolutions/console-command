@@ -3,13 +3,14 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Panel from '../../../components/ui/Panel';
 import { SchematicSlider, Toggle, Field } from '../../../components/dsp/Controls';
+import { Grid } from '../../../components/dsp/Responsive';
 import { RANGE, fmtHz } from '../../../api/dspUnits';
 import { color, space, type } from '../../../theme/tokens';
 
 export default function Tools({ st, api, disabled }) {
   const { tone, sweep, pink } = st.gen;
   return (
-    <View style={styles.wrap}>
+    <Grid>
       <Panel label="Tone Generator" code={tone.on ? 'ON' : 'OFF'} ticks contentStyle={styles.stack}>
         <Field label="Enable">
           <Toggle value={!!tone.on} disabled={disabled} onChange={(v) => api.setGen('tone', { on: v })} />
@@ -64,7 +65,7 @@ export default function Tools({ st, api, disabled }) {
       </Panel>
 
       <Text style={styles.note}>Generators output test signals through the DSP — keep master low. Level units pending CAL(C4).</Text>
-    </View>
+    </Grid>
   );
 }
 
