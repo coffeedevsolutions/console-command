@@ -9,6 +9,7 @@ import ControlsScreen from './screens/Controls';
 import NowPlayingScreen from './screens/NowPlaying';
 import LibraryScreen from './screens/Library';
 import Grundig1Screen from './screens/grundig1';
+import DspConsoleScreen from './screens/dsp';
 import { Grundig1Provider } from './screens/grundig1/state/grundig1Store';
 import { NowPlayingProvider } from './hooks/nowPlaying';
 import { color } from './theme/tokens';
@@ -67,6 +68,11 @@ export default function App() {
             name="Grundig1"
             component={Grundig1Screen}
             options={{ gestureEnabled: false }}
+          />
+          <Stack.Screen
+            name="DspConsole"
+            component={DspConsoleScreen}
+            options={{ animation: 'slide_from_right' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

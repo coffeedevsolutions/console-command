@@ -1,5 +1,6 @@
 // src/api/dspClient.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dlog } from './dspDebug';
 
 const KEY = '@dsp.baseUrl';
 // Default to the ESP32's mDNS hostname so the app keeps working even when the
@@ -44,6 +45,20 @@ async function request(path, { method = 'GET', body, timeout = 5000, headers } =
 
 function toWs(url) {
   return url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+}
+
+// Logged request wrapper — the single choke point the DSP dashboard writes
+// through, so bench testing shows every frame's REST payload + result.
+async function reqLogged(path, opts = {}) {
+  dlog('→', `${opts.method || 'GET'} ${path}`, opts.body);
+  try {
+    const r = await request(path, opts);
+    dlog('✓', path, r);
+    return r;
+  } catch (e) {
+    dlog('✗', `${path} — ${e?.message || e}`);
+    throw e;
+  }
 }
 
 export const dsp = {
@@ -135,6 +150,52 @@ export const dsp = {
 
   async copyPreset(from, to) {
     return request('/api/preset/copy', { method: 'POST', body: { from, to } });
+  },
+
+  // === DSP CONSOLE API (v2 firmware, BLE bridge) ===
+  // These map 1:1 to console-esp32/docs/REST_API.md. All logged for bench testing.
+
+  // Master 0..100 (firmware ramps). New body key {pct}; legacy setMaster uses {levelPct}.
+  async dspMaster(pct) {
+    return reqLogged('/api/master', { method: 'POST', body: { pct } });
+  },
+  // 15-band GEQ: bands = 15 dB floats (±12), optional preset index 0..12.
+  async dspGeq(bands, preset) {
+    const body = preset === undefined ? { bands } : { bands, preset };
+    return reqLogged('/api/geq', { method: 'POST', body });
+  },
+  // Per-channel output block. patch = any of { gainDb, mute, polarity, route,
+  // delay, xo:{hpfHz,hpfType,lpfHz,lpfType,preset}, limiter:{thresholdDb,attack,release,auto} }.
+  async dspOutput(ch, patch) {
+    return reqLogged('/api/output', { method: 'POST', body: { ch, ...patch } });
+  },
+  // One PEQ band (0..4). patch = { channel, freqHz, gainDb, q }.
+  async dspPeq(band, patch) {
+    return reqLogged('/api/peq', { method: 'POST', body: { band, ...patch } });
+  },
+  // Generators. patch = { tone:{...}?, sweep:{...}?, pink:{...}? } — send only the changed one.
+  async dspGen(patch) {
+    return reqLogged('/api/gen', { method: 'POST', body: patch });
+  },
+  // ESP32-side preset slots.
+  async dspPresetList() {
+    return reqLogged('/api/preset/list', { timeout: 4000 });
+  },
+  async dspPresetSave(slot, name = 'Preset') {
+    return reqLogged('/api/preset/save', { method: 'POST', body: { slot, name } });
+  },
+  async dspPresetLoad(slot) {
+    return reqLogged('/api/preset/load', { method: 'POST', body: { slot } });
+  },
+  // Link utilities.
+  async dspSyncFromDevice() {
+    return reqLogged('/api/dsp/sync', { method: 'POST' });
+  },
+  async dspApplyToDevice() {
+    return reqLogged('/api/dsp/apply', { method: 'POST' });
+  },
+  async dspFrameLog() {
+    return reqLogged('/api/dsp/log', { timeout: 4000 });
   },
 
   // === Lid Light API === (single controller; drives the whole strip)
