@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Updates from 'expo-updates';
+import AppleMusic, { capabilities as amCaps } from './modules/apple-music';
 import StatusScreen from './screens/Status';
 import ControlsScreen from './screens/Controls';
 import NowPlayingScreen from './screens/NowPlaying';
@@ -41,6 +42,17 @@ export default function App() {
         }
       } catch { /* offline or no update — ignore */ }
     })();
+  }, []);
+
+  // MusicKit catalog (Now Spinning duration + album, Apple Music search) needs its own
+  // authorization, separate from the media-library permission. Request it once — gated on media
+  // access already being granted, so it upgrades to "authorized" silently without a new prompt.
+  useEffect(() => {
+    if (AppleMusic.isAvailable && amCaps.catalogSearch
+      && AppleMusic.getAuthorizationStatus() === 'authorized'
+      && typeof AppleMusic.requestMusicKitAuthorization === 'function') {
+      AppleMusic.requestMusicKitAuthorization().catch(() => {});
+    }
   }, []);
 
   return (

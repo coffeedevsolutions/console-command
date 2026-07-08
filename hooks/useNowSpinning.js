@@ -43,6 +43,7 @@ export function NowSpinningProvider({ children }) {
   const prevId = useRef(null);
   const stateRef = useRef(state);
   const wakeAt = useRef(0);
+  const musicKitAuthed = useRef(false);
   const [wakeNonce, setWakeNonce] = useState(0);
 
   const active = SUPPORTED && enabled && appActive;
@@ -69,7 +70,14 @@ export function NowSpinningProvider({ children }) {
     };
     const fetchSong = async (appleMusicID) => {
       if (!appleMusicID || !AppleMusic.capabilities?.catalogSong) return null;
-      try { return await AppleMusic.getCatalogSong(appleMusicID); } catch { return null; }
+      try {
+        // MusicKit catalog needs its own authorization before resource requests resolve.
+        if (!musicKitAuthed.current && typeof AppleMusic.requestMusicKitAuthorization === 'function') {
+          await AppleMusic.requestMusicKitAuthorization().catch(() => {});
+          musicKitAuthed.current = true;
+        }
+        return await AppleMusic.getCatalogSong(appleMusicID);
+      } catch { return null; }
     };
 
     // Mode A — a track is known: stamp the match time (for the "how far in" readout), enrich it
