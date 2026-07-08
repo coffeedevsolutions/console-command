@@ -67,20 +67,30 @@ export function NowSpinningProvider({ children }) {
     const listen = async () => {
       try { return await NowSpinning.recognizeOnce(LISTEN_TIMEOUT); } catch { return null; }
     };
-    const fetchDuration = async (appleMusicID) => {
+    const fetchSong = async (appleMusicID) => {
       if (!appleMusicID || !AppleMusic.capabilities?.catalogSong) return null;
-      try { const s = await AppleMusic.getCatalogSong(appleMusicID); return s?.duration || null; }
-      catch { return null; }
+      try { return await AppleMusic.getCatalogSong(appleMusicID); } catch { return null; }
     };
 
-    // Mode A — a track is known: wait ~to its end, then burst-retry for the next one.
+    // Mode A — a track is known: stamp the match time (for the "how far in" readout), enrich it
+    // with album/duration/hi-res art from MusicKit, then wait ~to its end and burst for the next.
     const enterModeA = async (match) => {
       if (!alive()) return;
-      setTrack(match);
+      const matchAt = Date.now();
+      setTrack({ ...match, matchAt });
       setState('spinning');
       prevId.current = idOf(match);
-      const dur = await fetchDuration(match.appleMusicID);
+      const song = await fetchSong(match.appleMusicID);
       if (!alive()) return;
+      if (song) {
+        setTrack((prev) => (prev && prev.matchAt === matchAt ? {
+          ...prev,
+          albumTitle: song.albumTitle || prev.albumTitle,
+          duration: song.duration || prev.duration,
+          artworkURL: song.artworkURL || prev.artworkURL,   // hi-res catalog art
+        } : prev));
+      }
+      const dur = song?.duration || null;
       if (dur && dur > 0) {
         const remainingMs = Math.max(0, (dur - (match.matchOffset || 0)) * 1000);
         schedule(() => runBurst(0), Math.max(BURST_SPACING_MS, remainingMs - LEAD_MS));
