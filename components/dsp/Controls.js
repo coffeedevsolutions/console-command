@@ -11,10 +11,11 @@ import { color, radius, border, space, type } from '../../theme/tokens';
 // Local drag state so the thumb is smooth; commits once on release.
 function SchematicSliderBase({
   label, code, value, min, max, step = 1, unit,
-  format, onCommit, onDragChange, disabled, accent = true,
+  format, onCommit, onDragChange, disabled, accent = true, liveMs = 0,
 }) {
   const [local, setLocal] = useState(value);
   const holding = useRef(false);
+  const lastLive = useRef(0);
   useEffect(() => { if (!holding.current) setLocal(value); }, [value]);
 
   const show = format ? format(local) : `${local}${unit || ''}`;
@@ -32,7 +33,14 @@ function SchematicSliderBase({
         step={step}
         value={value}
         disabled={disabled}
-        onValueChange={(v) => { holding.current = true; setLocal(v); onDragChange && onDragChange(true); }}
+        onValueChange={(v) => {
+          holding.current = true; setLocal(v); onDragChange && onDragChange(true);
+          // Live push while dragging, throttled (firmware coalesces master writes).
+          if (liveMs && onCommit) {
+            const t = Date.now();
+            if (t - lastLive.current >= liveMs) { lastLive.current = t; onCommit(v); }
+          }
+        }}
         onSlidingComplete={(v) => {
           holding.current = false; onDragChange && onDragChange(false);
           setLocal(v); onCommit && onCommit(v);

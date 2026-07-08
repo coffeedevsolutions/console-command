@@ -17,6 +17,7 @@ export default function Levels({ st, api, disabled }) {
           unit="%" disabled={disabled}
           onDragChange={api.setDragging}
           onCommit={(v) => api.setMaster(Math.round(v))}
+          liveMs={100}
         />
       </Panel>
 
