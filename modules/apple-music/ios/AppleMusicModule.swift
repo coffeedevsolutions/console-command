@@ -122,7 +122,8 @@ public class AppleMusicModule: Module {
     }
     // "For You" personal recommendations → [{ title, playlists, albums }].
     AsyncFunction("getRecommendations") { (limit: Int, promise: Promise) in
-      if #available(iOS 15.0, *) { Task { promise.resolve(await self.recommendationsList(limit: limit)) } }
+      // MusicPersonalRecommendationsRequest is iOS 16.0+.
+      if #available(iOS 16.0, *) { Task { promise.resolve(await self.recommendationsList(limit: limit)) } }
       else { promise.resolve([[String: Any]]()) }
     }
     // Tracks of a catalog playlist → [songs]. Play them with playStoreIDs(their ids).
@@ -368,7 +369,7 @@ public class AppleMusicModule: Module {
     }
   }
 
-  @available(iOS 15.0, *)
+  @available(iOS 16.0, *)
   private func recommendationsList(limit: Int) async -> [[String: Any]] {
     do {
       var request = MusicPersonalRecommendationsRequest()
