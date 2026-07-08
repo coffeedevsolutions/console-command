@@ -27,6 +27,7 @@ export default function Library({ navigation, route }) {
   const libSearchOK = capabilities.librarySearch; // getAllSongs + searchLibrarySongs
   const libPlayOK = capabilities.libraryPlay;
 
+  const [mode, setMode] = useState(route?.params?.mode === 'search' ? 'search' : 'browse'); // 'browse' | 'search'
   const [source, setSource] = useState('library'); // 'library' | 'catalog'
   const [view, setView] = useState('playlists');   // 'playlists' | 'songs'
   const [query, setQuery] = useState('');
@@ -38,17 +39,19 @@ export default function Library({ navigation, route }) {
   const [scrubLetter, setScrubLetter] = useState(null); // letter under the finger while scrubbing
 
   const src = catOK ? source : 'library'; // locked to library until catalog is built
-  const searching = query.trim().length > 0;
+  const searching = mode === 'search' && query.trim().length > 0;
 
-  // Browse loaders (library)
+  // Browse loaders (library). Playlists load once regardless of mode so search can filter them
+  // client-side; the full songs list only loads for the browse SONGS view (it's the heavy one).
   useEffect(() => {
-    if (auth !== 'authorized' || searching || src !== 'library') return;
-    if (view === 'playlists' && playlists === null) {
+    if (auth !== 'authorized' || src !== 'library') return;
+    if (playlists === null) {
       AppleMusic.getPlaylists()
-        .then((list) => setPlaylists(sortByField(list, 'name')))
+        // Drop empty playlists / folder rows that MediaPlayer returns as junk.
+        .then((list) => setPlaylists(sortByField(list.filter((p) => p.count > 0), 'name')))
         .catch(() => setPlaylists([]));
     }
-    if (view === 'songs' && libSearchOK && songs === null) {
+    if (mode === 'browse' && view === 'songs' && libSearchOK && songs === null) {
       setBusy(true);
       // limit 0 = the whole library. The native side returns songs by iOS sort-title (articles
       // stripped) and any cap slices off the alphabet — "The …" songs bucket under T, etc. — so we
@@ -58,7 +61,7 @@ export default function Library({ navigation, route }) {
         .catch(() => setSongs([]))
         .finally(() => setBusy(false));
     }
-  }, [auth, searching, src, view, libSearchOK, playlists, songs]);
+  }, [auth, src, mode, view, libSearchOK, playlists, songs]);
 
   // Live search (debounced) against the selected source
   useEffect(() => {
@@ -134,21 +137,36 @@ export default function Library({ navigation, route }) {
       action={{ label: 'GRANT ACCESS', onPress: requestAuth }} />;
   }
 
-  // Decide the current list
+  // Browse list wrapper (drives the row kind + the alphabet scrubber).
   let cur;
-  if (searching) {
-    const can = src === 'library' ? libSearchOK : catOK;
-    cur = !can ? { locked: true } : { kind: 'song', data: Array.isArray(results) ? results : [] };
-  } else if (view === 'playlists') {
-    cur = { kind: 'playlist', data: playlists || [] };
-  } else {
-    cur = !libSearchOK ? { locked: true } : { kind: 'song', data: songs || [] };
+  if (view === 'playlists') cur = { kind: 'playlist', data: playlists || [] };
+  else cur = !libSearchOK ? { locked: true } : { kind: 'song', data: songs || [] };
+
+  // Search results: matching playlists (client-side over the loaded list) + matching songs
+  // (native). Catalog search is songs-only for now. Items are tagged so one list renders both,
+  // with lightweight section labels when both groups are present.
+  const q = query.trim().toLowerCase();
+  const matchedPlaylists = (searching && src === 'library' && playlists)
+    ? playlists.filter((p) => (p.name || '').toLowerCase().includes(q)) : [];
+  const searchLocked = searching && src === 'catalog' && !catOK;
+  const searchData = [];
+  if (searching && !searchLocked) {
+    const songResults = Array.isArray(results) ? results : [];
+    if (matchedPlaylists.length) {
+      searchData.push({ __header: 'PLAYLISTS' });
+      matchedPlaylists.forEach((p) => searchData.push({ ...p, __kind: 'playlist' }));
+    }
+    if (songResults.length) {
+      if (matchedPlaylists.length) searchData.push({ __header: 'SONGS' });
+      songResults.forEach((s) => searchData.push({ ...s, __kind: 'song' }));
+    }
   }
 
-  // Stable primitive/callback props so the memoized Row only re-renders when its own
-  // fields change (e.g. its active flag), not on every parent poll/state tick.
+  // Stable primitive/callback props so the memoized Row only re-renders when its own fields
+  // change. Per-item __kind lets one list mix playlists + songs (search); browse is homogeneous.
   const renderItem = ({ item }) => {
-    const isPl = cur.kind === 'playlist';
+    if (item.__header) return <SectionLabel text={item.__header} />;
+    const isPl = item.__kind ? item.__kind === 'playlist' : cur.kind === 'playlist';
     const key = isPl ? 'pl:' + item.id : (item.persistentID ? 'sg:' + item.persistentID : 'cs:' + item.id);
     return (
       <Row
@@ -161,55 +179,72 @@ export default function Library({ navigation, route }) {
     );
   };
 
+  const listData = searching ? searchData : (cur.locked ? [] : cur.data);
+  const showScrub = !searching && !!scrubIndex;
+
   return (
     <View style={styles.root}>
       <DottedGrid />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>MUSIC LIBRARY</Text>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={16} style={styles.closeBtn}>
-            <Text style={styles.closeGlyph}>×</Text>
-          </Pressable>
-        </View>
+        {/* Header — browse: title + search/close; search: the search field + cancel */}
+        {mode === 'search' ? (
+          <View style={styles.header}>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              autoFocus
+              autoCorrect={false}
+              returnKeyType="search"
+              placeholder={src === 'library' ? 'Search your library…' : 'Search Apple Music…'}
+              placeholderTextColor={color.textLow}
+              style={[styles.search, styles.searchField]}
+            />
+            <Pressable onPress={() => { setQuery(''); setMode('browse'); }} hitSlop={12} style={styles.cancelBtn}>
+              <Text style={styles.cancelTxt}>CANCEL</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.header}>
+            <Text style={styles.title}>MUSIC LIBRARY</Text>
+            <View style={styles.headerBtns}>
+              <Pressable onPress={() => setMode('search')} hitSlop={16} style={styles.closeBtn}>
+                <Text style={styles.searchGlyph}>⌕</Text>
+              </Pressable>
+              <Pressable onPress={() => navigation.goBack()} hitSlop={16} style={styles.closeBtn}>
+                <Text style={styles.closeGlyph}>×</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
-        {/* Search (live) */}
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          autoFocus={route?.params?.mode === 'search'}
-          autoCorrect={false}
-          returnKeyType="search"
-          placeholder={src === 'library' ? 'Search your library…' : 'Search Apple Music…'}
-          placeholderTextColor={color.textLow}
-          style={styles.search}
-        />
-
-        {/* Source selector */}
+        {/* Source selector (Apple Music unlocks after the MusicKit build) */}
         <View style={styles.seg}>
           <SegBtn label="LIBRARY" on={src === 'library'} onPress={() => setSource('library')} />
           <SegBtn label={catOK ? 'APPLE MUSIC' : 'APPLE MUSIC · SOON'} on={src === 'catalog'}
             disabled={!catOK} onPress={() => catOK && setSource('catalog')} />
         </View>
 
-        {/* Browse selector (hidden while searching) */}
-        {!searching && (
+        {/* Browse selector — only in browse mode */}
+        {mode === 'browse' && (
           <View style={styles.seg}>
             <SegBtn label="PLAYLISTS" on={view === 'playlists'} onPress={() => setView('playlists')} />
             <SegBtn label="SONGS" on={view === 'songs'} onPress={() => setView('songs')} />
           </View>
         )}
 
-        {cur.locked ? (
+        {((mode === 'browse' && cur.locked) || searchLocked) ? (
           <Locked />
+        ) : (mode === 'search' && !searching) ? (
+          <Empty text="TYPE TO SEARCH" />
         ) : (
           <View style={styles.listWrap}>
             <FlatList
               ref={flatListRef}
-              data={cur.data}
+              data={listData}
               renderItem={renderItem}
-              keyExtractor={(item, i) => item.id || item.persistentID || String(i)}
+              keyExtractor={(item, i) => (item.__header ? 'h:' + item.__header : (item.id || item.persistentID || String(i)))}
               style={styles.flex}
-              getItemLayout={(_, index) => ({ length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index })}
+              {...(showScrub ? { getItemLayout: (_, index) => ({ length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index }) } : {})}
               onScrollToIndexFailed={() => {}}
               extraData={nowKey}
               keyboardShouldPersistTaps="handled"
@@ -217,7 +252,7 @@ export default function Library({ navigation, route }) {
                 ? <ActivityIndicator color={color.accent} style={{ marginTop: space.xl }} />
                 : <Empty text={searching ? 'NO RESULTS' : 'NOTHING HERE'} />}
             />
-            {scrubIndex && (
+            {showScrub && (
               <ScrubBar
                 letters={scrubIndex.letters}
                 onScrub={(L) => { setScrubLetter(L); scrubTo(L); }}
@@ -230,6 +265,10 @@ export default function Library({ navigation, route }) {
       {scrubLetter && <ScrubOverlay letter={scrubLetter} />}
     </View>
   );
+}
+
+function SectionLabel({ text }) {
+  return <Text style={styles.sectionLabel}>{text}</Text>;
 }
 
 // First-letter "bucket" for the scrubber: A–Z, or '#' for anything non-alphabetic (numbers/symbols).
@@ -358,12 +397,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: space.lg },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: space.sm, paddingBottom: space.md },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, paddingTop: space.sm, paddingBottom: space.md },
+  headerBtns: { flexDirection: 'row', gap: space.sm },
   title: { fontFamily: font.mono, fontSize: 14, letterSpacing: 3, color: color.textHi },
   closeBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: border.thick, borderColor: color.lineStrong, backgroundColor: color.panel },
   closeGlyph: { color: color.textHi, fontSize: 24, lineHeight: 26, fontWeight: '700' },
+  searchGlyph: { color: color.textHi, fontSize: 22, lineHeight: 24, fontWeight: '700' },
 
   search: { backgroundColor: color.bgSunken, borderWidth: border.thick, borderColor: color.lineStrong, paddingHorizontal: space.md, paddingVertical: space.md, color: color.textHi, fontFamily: font.mono, marginBottom: space.sm },
+  searchField: { flex: 1, marginBottom: 0 },
+  cancelBtn: { height: 44, paddingHorizontal: space.sm, alignItems: 'center', justifyContent: 'center' },
+  cancelTxt: { fontFamily: font.mono, fontSize: 11, letterSpacing: 2, color: color.textMid },
+  sectionLabel: { fontFamily: font.mono, fontSize: 10, letterSpacing: 2, color: color.textLow, paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.xs },
 
   seg: { flexDirection: 'row', borderWidth: border.thick, borderColor: color.lineStrong, marginBottom: space.sm },
   segBtn: { flex: 1, paddingVertical: space.md, alignItems: 'center', backgroundColor: color.bgSunken },
