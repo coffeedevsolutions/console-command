@@ -2,10 +2,14 @@
 // "Now Spinning" — identify the record on the Phono source via the native ShazamKit primitive,
 // on a duration-timed cadence with a 2-minute sleep fallback (see NOW_SPINNING_PLAN.md §1).
 //
-// Fully gated on capabilities.shazam: in the current (pre-rebuild) build SUPPORTED is false, the
-// hook parks at 'unsupported', runs no effects, and calls no native methods — the live app is
-// untouched. It lights up automatically after the ShazamKit `eas build`.
-import { useCallback, useEffect, useRef, useState } from 'react';
+// Lifted into a PROVIDER so the state machine keeps running across the Status mini-bar and the
+// full-screen NowSpinning view (a modal that would otherwise blur/unmount a screen-local hook).
+// Active whenever the console source is Phono (Status calls setEnabled) AND the app is foregrounded
+// — not tied to which screen is on top. Fully gated on capabilities.shazam: in a build without the
+// native module SUPPORTED is false, the machine parks at 'unsupported', runs no effects, and calls
+// no native methods.
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import NowSpinning, { capabilities as shazamCaps } from '../modules/now-spinning';
 import AppleMusic from '../modules/apple-music';
 
@@ -19,14 +23,18 @@ const BURST_MAX = 5;              // attempts around a track boundary
 const BURST_SPACING_MS = 6_000;   // gap between burst attempts
 const WAKE_DEBOUNCE_MS = 1_000;
 
-// Module-level wake signal so an app-wide touch handler (App.js) can nudge the single hook
-// instance (in Status) without prop-drilling. The mounted hook registers its wake here.
+// Module-level wake signal so an app-wide touch handler (App.js) can nudge the provider without
+// prop-drilling. The mounted provider registers its wake here.
 export const wakeSignal = { fire: () => {} };
 
 const idOf = (m) => (m ? (m.appleMusicID ?? m.isrc ?? m.title ?? null) : null);
 
-// state: 'unsupported' | 'off' | 'denied' | 'listening' | 'spinning' | 'dormant'
-export function useNowSpinning({ active }) {
+const Ctx = createContext(null);
+
+export function NowSpinningProvider({ children }) {
+  const [enabled, setEnabled] = useState(false);   // source === Phono (set by Status)
+  const [appActive, setAppActive] = useState(true);
+  // state: 'unsupported' | 'off' | 'denied' | 'listening' | 'spinning' | 'dormant'
   const [state, setState] = useState(SUPPORTED ? 'off' : 'unsupported');
   const [track, setTrack] = useState(null);
 
@@ -37,7 +45,14 @@ export function useNowSpinning({ active }) {
   const wakeAt = useRef(0);
   const [wakeNonce, setWakeNonce] = useState(0);
 
+  const active = SUPPORTED && enabled && appActive;
+
   useEffect(() => { stateRef.current = state; }, [state]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => setAppActive(s === 'active'));
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!SUPPORTED) { setState('unsupported'); return undefined; }
@@ -110,22 +125,33 @@ export function useNowSpinning({ active }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, wakeNonce]);
 
-  // Called on any touch (app-wide). Only re-listens when we're asleep; debounced.
-  const wake = useCallback(() => {
+  // Force an immediate re-listen (used by the "identify again" tap). Works from any state.
+  const identify = useCallback(() => {
     if (!SUPPORTED || !active) return;
-    if (stateRef.current !== 'dormant') return;
     const now = Date.now();
     if (now - wakeAt.current < WAKE_DEBOUNCE_MS) return;
     wakeAt.current = now;
     setWakeNonce((n) => n + 1);
   }, [active]);
 
-  // Register this instance's wake for the app-wide touch handler.
+  // Called on any touch (app-wide). Only re-listens when we're asleep; debounced.
+  const wake = useCallback(() => {
+    if (stateRef.current !== 'dormant') return;
+    identify();
+  }, [identify]);
+
   useEffect(() => {
     if (!SUPPORTED) return undefined;
     wakeSignal.fire = wake;
     return () => { if (wakeSignal.fire === wake) wakeSignal.fire = () => {}; };
   }, [wake]);
 
-  return { supported: SUPPORTED, state, track, wake };
+  const value = { supported: SUPPORTED, state, track, wake, identify, setEnabled };
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+const INERT = { supported: false, state: 'unsupported', track: null, wake: () => {}, identify: () => {}, setEnabled: () => {} };
+
+export function useNowSpinning() {
+  return useContext(Ctx) || INERT;
 }

@@ -8,12 +8,13 @@ import * as Updates from 'expo-updates';
 import StatusScreen from './screens/Status';
 import ControlsScreen from './screens/Controls';
 import NowPlayingScreen from './screens/NowPlaying';
+import NowSpinningScreen from './screens/NowSpinning';
 import LibraryScreen from './screens/Library';
 import Grundig1Screen from './screens/grundig1';
 import DspConsoleScreen from './screens/dsp';
 import { Grundig1Provider } from './screens/grundig1/state/grundig1Store';
 import { NowPlayingProvider } from './hooks/nowPlaying';
-import { wakeSignal } from './hooks/useNowSpinning';
+import { NowSpinningProvider, wakeSignal } from './hooks/useNowSpinning';
 import { color } from './theme/tokens';
 
 const Stack = createNativeStackNavigator();
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <Grundig1Provider>
       <NowPlayingProvider>
+      <NowSpinningProvider>
       <StatusBar hidden style="light" />
       {/* Capture (not intercept) every touch so a tap anywhere can wake Now Spinning from sleep. */}
       <View
@@ -67,6 +69,11 @@ export default function App() {
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
           />
           <Stack.Screen
+            name="NowSpinning"
+            component={NowSpinningScreen}
+            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+          />
+          <Stack.Screen
             name="Library"
             component={LibraryScreen}
             options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
@@ -84,6 +91,7 @@ export default function App() {
         </Stack.Navigator>
       </NavigationContainer>
       </View>
+      </NowSpinningProvider>
       </NowPlayingProvider>
     </Grundig1Provider>
   );

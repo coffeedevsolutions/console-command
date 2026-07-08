@@ -72,8 +72,11 @@ export default function Status({ navigation }) {
   // Now Spinning (vinyl recognition) — only on Phono, and only once the ShazamKit build lands
   // (spin.supported is false in the current build, so the panel stays plain Apple Music).
   const phono = activeSource === 'turntable';
-  const spin = useNowSpinning({ active: phono && isFocused });
-  const showSpinning = phono && spin.supported;
+  const { supported: spinSupported, state: spinState, track: spinTrack, identify: spinIdentify, setEnabled: setSpinEnabled } = useNowSpinning();
+  // Now Spinning runs whenever Phono is selected (provider is app-wide + foreground-gated), so it
+  // stays live under the full-screen NowSpinning view too.
+  useEffect(() => { setSpinEnabled(phono); }, [phono, setSpinEnabled]);
+  const showSpinning = phono && spinSupported;
 
   async function switchSource(next) {
     if (switching || next === activeSource) return;
@@ -157,7 +160,7 @@ export default function Status({ navigation }) {
             <>
           {/* NOW PLAYING — headered panel above input source, part of the cascade */}
           <Reveal index={0}>
-            <Pressable onPress={() => { if (!showSpinning) navigation.navigate('NowPlaying'); }}>
+            <Pressable onPress={() => navigation.navigate(showSpinning ? 'NowSpinning' : 'NowPlaying')}>
               <Panel
                 label={showSpinning ? 'Now Spinning' : 'Now Playing'}
                 code={showSpinning ? 'PHONO · SHAZAM' : (npTrack ? 'APPLE MUSIC' : 'TAP TO OPEN')}
@@ -165,7 +168,7 @@ export default function Status({ navigation }) {
                 contentStyle={styles.npRow}
               >
                 {showSpinning ? (
-                  <NowSpinningCard state={spin.state} track={spin.track} />
+                  <NowSpinningCard state={spinState} track={spinTrack} onIdentify={spinIdentify} />
                 ) : (
                   <>
                     <View style={styles.npBarLeft}>
