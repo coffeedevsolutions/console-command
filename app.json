@@ -28,6 +28,7 @@
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Console Command connects to your Whir console over the local network to send control commands.",
         "NSAppleMusicUsageDescription": "Console Command shows what's playing and lets you control Apple Music playback that's streaming to the console.",
+        "NSMicrophoneUsageDescription": "Console listens for a few seconds to identify the record playing on your turntable.",
         "NSBonjourServices": [
           "_http._tcp",
           "_http._tcp"

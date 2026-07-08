@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +13,7 @@ import Grundig1Screen from './screens/grundig1';
 import DspConsoleScreen from './screens/dsp';
 import { Grundig1Provider } from './screens/grundig1/state/grundig1Store';
 import { NowPlayingProvider } from './hooks/nowPlaying';
+import { wakeSignal } from './hooks/useNowSpinning';
 import { color } from './theme/tokens';
 
 const Stack = createNativeStackNavigator();
@@ -44,6 +46,11 @@ export default function App() {
     <Grundig1Provider>
       <NowPlayingProvider>
       <StatusBar hidden style="light" />
+      {/* Capture (not intercept) every touch so a tap anywhere can wake Now Spinning from sleep. */}
+      <View
+        style={{ flex: 1 }}
+        onStartShouldSetResponderCapture={() => { wakeSignal.fire(); return false; }}
+      >
       <NavigationContainer theme={navTheme}>
         <Stack.Navigator
           initialRouteName="Status"
@@ -76,6 +83,7 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
+      </View>
       </NowPlayingProvider>
     </Grundig1Provider>
   );

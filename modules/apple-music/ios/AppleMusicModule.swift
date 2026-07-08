@@ -130,6 +130,13 @@ public class AppleMusicModule: Module {
       if #available(iOS 15.0, *) { Task { promise.resolve(await self.catalogPlaylistTracks(playlistId)) } }
       else { promise.resolve([[String: Any]]()) }
     }
+    // A single catalog song by its Apple Music ID → { id, title, artist, albumTitle, duration,
+    // artworkURL } or nil. Used by "Now Spinning" to fetch the track DURATION (drives the
+    // ShazamKit re-listen cadence) + hi-res artwork from a ShazamKit match's appleMusicID.
+    AsyncFunction("getCatalogSong") { (id: String, promise: Promise) in
+      if #available(iOS 15.0, *) { Task { promise.resolve(await self.catalogSong(id)) } }
+      else { promise.resolve(nil) }
+    }
     // Recently-added library songs (MediaPlayer; no MusicKit entitlement needed).
     AsyncFunction("getRecentlyAddedSongs") { (limit: Int) -> [[String: Any]] in
       return self.recentlyAddedSongs(limit: limit)
@@ -282,6 +289,18 @@ public class AppleMusicModule: Module {
       guard let song = response.items.first,
             let url = song.artwork?.url(width: size, height: size) else { return nil }
       return url.absoluteString
+    } catch {
+      return nil
+    }
+  }
+
+  @available(iOS 15.0, *)
+  private func catalogSong(_ id: String) async -> [String: Any]? {
+    do {
+      let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(id))
+      let response = try await request.response()
+      guard let song = response.items.first else { return nil }
+      return songDict(song)
     } catch {
       return nil
     }

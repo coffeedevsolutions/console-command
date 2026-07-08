@@ -260,8 +260,22 @@ Reuse the schematic Panel + TransportIcons styling; artwork via the match's `art
 - Check: mic-permission prompt/flow, offline → DORMANT + hint, source flip tear-down, background
   pause/resume, and that control taps elsewhere don't spuriously wake it.
 
-## 12. Open decisions
-- **Listen window length** (match confidence vs. speed): start ~5 s, tune in N2.
-- **Card placement:** replace the Now Playing mini-bar on Phono, or a separate "Now Spinning" panel?
-- **Wake scope:** truly any touch app-wide, or only touches on the command center? (Spec says any.)
-- Fold ShazamKit into `apple-music` or keep a separate `now-spinning` module? (Plan assumes separate.)
+## 12. Decisions (locked)
+- **Card:** reuse the existing Now Playing panel — on Phono it relabels to **"Now Spinning"** and
+  renders a little **vinyl record whose center label is the album art**, spinning while identifying.
+- **Wake scope:** **any touch app-wide** — a capture-phase responder on the app root
+  (`App.js`) fires `wakeSignal.fire()`; the hook only acts on it from DORMANT (debounced).
+- **Module:** **separate** `modules/now-spinning` (ShazamKit); durations come from a new
+  `AppleMusic.getCatalogSong(id)` on the existing MusicKit module.
+- **Listen window:** start ~6 s (`LISTEN_TIMEOUT`), tune over the air.
+
+## 13. Status (this commit)
+- ✅ **Native staged** (inert until the `eas build`): `modules/now-spinning` (`recognizeOnce`,
+  `requestMicPermission`, `micPermissionStatus`); `AppleMusic.getCatalogSong(id)` for durations;
+  `NSMicrophoneUsageDescription` in `app.json`.
+- ✅ **JS built + shipped OTA, gated on `capabilities.shazam`** (false in the current build, so it's
+  dormant and the live app is unchanged): `hooks/useNowSpinning.js` (the two-mode machine),
+  `components/NowSpinningCard.js` (spinning vinyl), Status panel is source-aware, App.js touch-wake.
+- ⏳ **Remaining = the rebuild.** Enable ShazamKit + MusicKit on the App ID (done: ShazamKit),
+  `eas build -p ios`. On install, `capabilities.shazam` flips true and Now Spinning lights up on
+  Phono — then iterate purely over the air.

@@ -36,27 +36,30 @@ the LIBRARY features; the CATALOG features additionally need the Developer-porta
   `catalogPlaylistTracks`, `catalogSearch` — the Library UI already feature-detects these,
   so the SONGS/SEARCH/APPLE-MUSIC parts light up automatically after the rebuild.
 
-## Queued for next rebuild — NOW SPINNING (ShazamKit) · native NOT written yet
+## Queued for next rebuild — NOW SPINNING (ShazamKit) · native STAGED, JS shipped
 
-Vinyl recognition on the Phono source — see `NOW_SPINNING_PLAN.md` for the full design. Unlike the
-MusicKit block above, the Swift is **not staged yet**; scaffold it (inert, capability-gated) before
-the rebuild so `eas build` picks it up and the behavior can then ship over the air.
+Vinyl recognition on the Phono source — see `NOW_SPINNING_PLAN.md`. Native is staged inert and the
+whole JS layer already shipped over the air behind `capabilities.shazam` (false until the build).
+Everything below is committed; the **only remaining step is the `eas build`**.
 
-### What to do at rebuild time
-1. **Apple Developer portal:** enable the **ShazamKit** app service for App ID
-   `com.whir.consolecommand` (alongside MusicKit — Now Spinning uses both: ShazamKit to identify,
-   MusicKit for the track duration that drives the re-listen cadence).
-2. **`app.json`:** add `ios.infoPlist.NSMicrophoneUsageDescription` (mic sample for recognition).
-3. **New module `modules/now-spinning`** (mirror `apple-music`): Swift `recognizeOnce(timeoutSec)` →
-   `{ title, artist, artworkURL, appleMusicID, isrc, matchOffset, shazamDuration?, rms }` via
-   `SHSession` + `AVAudioEngine` (iOS 15+); `requestMicPermission` / `micPermissionStatus`. Podspec
-   `s.frameworks = 'ShazamKit', 'AVFoundation'`. Add the ShazamKit **entitlement/capability** (config
-   plugin or `ios.entitlements`); verify the generated `.entitlements` after the first build.
-4. `index.ts`: `capabilities.shazam = typeof Native?.recognizeOnce === 'function'`; route via
-   `requireNative()` so it's inert until the rebuild.
-5. **After install (OTA):** build `hooks/useNowSpinning.js` (Mode-A duration timer + boundary burst,
-   Mode-B 2-min sleep/wake), the source-aware "Now Spinning" card on `Status.js`, and the touch-wake
-   wrapper. All tunable over the air.
+### Staged / done
+- ✅ App ID: **ShazamKit** service enabled (portal). MusicKit already queued above (Now Spinning uses
+  both: ShazamKit identifies, `AppleMusic.getCatalogSong(id)` gives the track duration).
+- ✅ `app.json` → `ios.infoPlist.NSMicrophoneUsageDescription`.
+- ✅ `modules/now-spinning/` — Swift `recognizeOnce(timeoutSec)` (SHSession + AVAudioEngine, iOS 15+)
+  returning `{ title, artist, artworkURL, appleMusicID, isrc, subtitle, matchOffset, listenLatency }`,
+  plus `requestMicPermission` / `micPermissionStatus`. Podspec links `ShazamKit`, `AVFoundation`.
+  `index.ts` gates via `capabilities.shazam`.
+- ✅ `modules/apple-music`: added `getCatalogSong(id)` (MusicKit) → duration + hi-res art.
+- ✅ JS (live, dormant until the build): `hooks/useNowSpinning.js`, `components/NowSpinningCard.js`,
+  source-aware panel in `Status.js`, app-wide touch-wake in `App.js`.
+
+### Remaining at rebuild time
+1. **Confirm the ShazamKit entitlement/capability** is on the build. Enabling the App-ID service
+   provisions it; if EAS needs it in the entitlements file, add via a config plugin / `ios.entitlements`
+   and **verify the generated `.entitlements`** after the first build (catalog-match errors ⇒ this).
+2. `eas build -p ios --profile production` (bump `ios.buildNumber`). On install, `capabilities.shazam`
+   → true and Now Spinning activates on Phono. Iterate everything else over the air.
 
 ## Notes
 - When rebuilding, also re-verify the one-build-forever assumptions (no new native deps

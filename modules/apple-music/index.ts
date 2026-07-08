@@ -95,6 +95,7 @@ interface AppleMusicNative {
   getRecommendations(limit: number): Promise<Recommendation[]>;
   getCatalogPlaylistTracks(playlistId: string): Promise<CatalogSong[]>;
   getRecentlyAddedSongs(limit: number): Promise<LibrarySong[]>;
+  getCatalogSong(id: string): Promise<CatalogSong | null>;
 }
 
 function requireNative(): AppleMusicNative {
@@ -159,6 +160,9 @@ export const AppleMusic = {
     requireNative().getCatalogPlaylistTracks(playlistId),
   getRecentlyAddedSongs: (limit = 100): Promise<LibrarySong[]> =>
     requireNative().getRecentlyAddedSongs(limit),
+  // One catalog song by Apple Music ID (duration + hi-res art) — for the Now Spinning cadence.
+  getCatalogSong: (id: string): Promise<CatalogSong | null> =>
+    requireNative().getCatalogSong(id),
 };
 
 // Which staged methods actually exist on the linked native module. Use this to
@@ -171,6 +175,7 @@ export const capabilities = {
   charts: typeof (Native as any)?.getCatalogCharts === 'function',
   recommendations: typeof (Native as any)?.getRecommendations === 'function',
   catalogPlaylistTracks: typeof (Native as any)?.getCatalogPlaylistTracks === 'function',
+  catalogSong: typeof (Native as any)?.getCatalogSong === 'function',
 };
 
 export default AppleMusic;

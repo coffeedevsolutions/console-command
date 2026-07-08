@@ -9,6 +9,8 @@ import { useIsFocused } from '@react-navigation/native';
 import { dsp } from '../api/dspClient';
 import { useConnection } from '../hooks/useConnection';
 import { useNowPlayingStable, useNowPlayingPosition } from '../hooks/nowPlaying';
+import { useNowSpinning } from '../hooks/useNowSpinning';
+import NowSpinningCard from '../components/NowSpinningCard';
 import LidLightCard from '../components/LidLightCard';
 import DottedGrid from '../components/ui/DottedGrid';
 import Panel, { Tick } from '../components/ui/Panel';
@@ -66,6 +68,12 @@ export default function Status({ navigation }) {
   }, [conn.source, optimisticSource]);
 
   const activeSource = optimisticSource || conn.source || 'turntable';
+
+  // Now Spinning (vinyl recognition) — only on Phono, and only once the ShazamKit build lands
+  // (spin.supported is false in the current build, so the panel stays plain Apple Music).
+  const phono = activeSource === 'turntable';
+  const spin = useNowSpinning({ active: phono && isFocused });
+  const showSpinning = phono && spin.supported;
 
   async function switchSource(next) {
     if (switching || next === activeSource) return;
@@ -149,13 +157,24 @@ export default function Status({ navigation }) {
             <>
           {/* NOW PLAYING — headered panel above input source, part of the cascade */}
           <Reveal index={0}>
-            <Pressable onPress={() => navigation.navigate('NowPlaying')}>
-              <Panel label="Now Playing" code={npTrack ? 'APPLE MUSIC' : 'TAP TO OPEN'} ticks contentStyle={styles.npRow}>
-                <View style={styles.npBarLeft}>
-                  <Text style={styles.npBarTitle} numberOfLines={1}>{npTrack?.title || 'Nothing playing'}</Text>
-                  <Text style={styles.npBarArtist} numberOfLines={1}>{npTrack?.artist || 'Apple Music'}</Text>
-                </View>
-                {npTrack ? <MiniBarTime /> : null}
+            <Pressable onPress={() => { if (!showSpinning) navigation.navigate('NowPlaying'); }}>
+              <Panel
+                label={showSpinning ? 'Now Spinning' : 'Now Playing'}
+                code={showSpinning ? 'PHONO · SHAZAM' : (npTrack ? 'APPLE MUSIC' : 'TAP TO OPEN')}
+                ticks
+                contentStyle={styles.npRow}
+              >
+                {showSpinning ? (
+                  <NowSpinningCard state={spin.state} track={spin.track} />
+                ) : (
+                  <>
+                    <View style={styles.npBarLeft}>
+                      <Text style={styles.npBarTitle} numberOfLines={1}>{npTrack?.title || 'Nothing playing'}</Text>
+                      <Text style={styles.npBarArtist} numberOfLines={1}>{npTrack?.artist || 'Apple Music'}</Text>
+                    </View>
+                    {npTrack ? <MiniBarTime /> : null}
+                  </>
+                )}
               </Panel>
             </Pressable>
           </Reveal>
