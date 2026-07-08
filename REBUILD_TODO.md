@@ -36,6 +36,28 @@ the LIBRARY features; the CATALOG features additionally need the Developer-porta
   `catalogPlaylistTracks`, `catalogSearch` — the Library UI already feature-detects these,
   so the SONGS/SEARCH/APPLE-MUSIC parts light up automatically after the rebuild.
 
+## Queued for next rebuild — NOW SPINNING (ShazamKit) · native NOT written yet
+
+Vinyl recognition on the Phono source — see `NOW_SPINNING_PLAN.md` for the full design. Unlike the
+MusicKit block above, the Swift is **not staged yet**; scaffold it (inert, capability-gated) before
+the rebuild so `eas build` picks it up and the behavior can then ship over the air.
+
+### What to do at rebuild time
+1. **Apple Developer portal:** enable the **ShazamKit** app service for App ID
+   `com.whir.consolecommand` (alongside MusicKit — Now Spinning uses both: ShazamKit to identify,
+   MusicKit for the track duration that drives the re-listen cadence).
+2. **`app.json`:** add `ios.infoPlist.NSMicrophoneUsageDescription` (mic sample for recognition).
+3. **New module `modules/now-spinning`** (mirror `apple-music`): Swift `recognizeOnce(timeoutSec)` →
+   `{ title, artist, artworkURL, appleMusicID, isrc, matchOffset, shazamDuration?, rms }` via
+   `SHSession` + `AVAudioEngine` (iOS 15+); `requestMicPermission` / `micPermissionStatus`. Podspec
+   `s.frameworks = 'ShazamKit', 'AVFoundation'`. Add the ShazamKit **entitlement/capability** (config
+   plugin or `ios.entitlements`); verify the generated `.entitlements` after the first build.
+4. `index.ts`: `capabilities.shazam = typeof Native?.recognizeOnce === 'function'`; route via
+   `requireNative()` so it's inert until the rebuild.
+5. **After install (OTA):** build `hooks/useNowSpinning.js` (Mode-A duration timer + boundary burst,
+   Mode-B 2-min sleep/wake), the source-aware "Now Spinning" card on `Status.js`, and the touch-wake
+   wrapper. All tunable over the air.
+
 ## Notes
 - When rebuilding, also re-verify the one-build-forever assumptions (no new native deps
   slipped in that weren't intended) and keep `runtimeVersion` at `1.0.0` unless there's a
